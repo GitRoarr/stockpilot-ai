@@ -125,17 +125,44 @@ export function resendEmail(eid: string): void {
 
 export const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
-export function layout(title: string, body: string): string {
-  return `<!doctype html><html><body style="font-family:system-ui,Segoe UI,Arial,sans-serif;background:#f7f6f2;padding:24px;color:#1d2433">
-<div style="max-width:640px;margin:auto;background:#fff;border-radius:10px;padding:24px;border:1px solid #e5e2d9">
-<p style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#2f6f4f;margin:0">StockPilot AI</p>
-<h2 style="margin:6px 0 16px">${esc(title)}</h2>${body}
-<p style="font-size:11px;color:#777;margin-top:24px">Sent by StockPilot AI on behalf of the restaurant.</p>
-</div></body></html>`;
+// Transactional email layout: table-based and inline-styled so it renders the same in Gmail, Outlook and Apple Mail.
+const BRAND = '#0f6e56';
+export function layout(title: string, body: string, opts: { preheader?: string; restaurant?: string } = {}): string {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(title)}</title></head>
+<body style="margin:0;padding:0;background:#f6f5f1;color:#1c201e;font-family:Inter,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased">
+${opts.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(opts.preheader)}</div>` : ''}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f5f1;padding:28px 12px"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px">
+<tr><td style="padding:0 4px 14px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+    <td style="font-size:15px;font-weight:700;color:#1c201e"><img src="${esc(config.APP_BASE_URL)}/logo-email.png" width="28" height="28" alt="" style="vertical-align:-8px;margin-right:8px;border:0">StockPilot AI</td>
+    ${opts.restaurant ? `<td align="right" style="font-size:12px;color:#646a66">${esc(opts.restaurant)}</td>` : ''}
+  </tr></table>
+</td></tr>
+<tr><td style="background:#ffffff;border:1px solid #e7e4dd;border-radius:10px;padding:28px">
+  <h1 style="margin:0 0 18px;font-size:20px;line-height:1.3;font-weight:650;color:#1c201e">${esc(title)}</h1>
+  <div style="font-size:14px;line-height:1.6;color:#2b302d">${body}</div>
+</td></tr>
+<tr><td style="padding:16px 4px 0;font-size:11px;line-height:1.6;color:#80867f">Sent by StockPilot AI on behalf of ${esc(opts.restaurant ?? 'the restaurant')}. To respond, please use the button above.</td></tr>
+</table></td></tr></table></body></html>`;
 }
 
-export function table(headers: string[], rows: (string | number)[][]): string {
-  const th = headers.map((h) => `<th style="text-align:left;border-bottom:1px solid #ddd;padding:6px 8px;font-size:13px">${esc(h)}</th>`).join('');
-  const tr = rows.map((r) => `<tr>${r.map((c) => `<td style="border-bottom:1px solid #eee;padding:6px 8px;font-size:13px">${esc(c)}</td>`).join('')}</tr>`).join('');
-  return `<table style="border-collapse:collapse;width:100%;margin:12px 0">${th ? `<tr>${th}</tr>` : ''}${tr}</table>`;
+/** Email button (bulletproof: a padded link inside a table cell). */
+export function button(href: string, label: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px 0 8px"><tr><td style="border-radius:6px;background:${BRAND}"><a href="${esc(href)}" style="display:inline-block;padding:11px 20px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px">${esc(label)}</a></td></tr></table>`;
+}
+
+/** Key facts as a two-column summary box. */
+export function summary(rows: [string, string][]): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 18px;background:#f6f5f1;border-radius:8px">${rows
+    .map(([k, v]) => `<tr><td style="padding:8px 14px;font-size:13px;color:#646a66;width:40%">${esc(k)}</td><td style="padding:8px 14px;font-size:13px;font-weight:600;color:#1c201e;text-align:right">${v}</td></tr>`)
+    .join('')}</table>`;
+}
+
+/** Data table; columns listed in `right` are right-aligned (amounts and quantities). */
+export function table(headers: string[], rows: (string | number)[][], right: number[] = []): string {
+  const al = (i: number) => (right.includes(i) ? 'right' : 'left');
+  const th = headers.map((h, i) => `<th style="text-align:${al(i)};border-bottom:1px solid #e7e4dd;padding:8px 10px;font-size:12px;font-weight:600;color:#646a66;background:#faf9f6">${esc(h)}</th>`).join('');
+  const tr = rows.map((r) => `<tr>${r.map((c, i) => `<td style="text-align:${al(i)};border-bottom:1px solid #f0eee8;padding:9px 10px;font-size:13px;color:#1c201e">${esc(c)}</td>`).join('')}</tr>`).join('');
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:8px 0 12px;border:1px solid #e7e4dd;border-radius:8px">${th ? `<tr>${th}</tr>` : ''}${tr}</table>`;
 }

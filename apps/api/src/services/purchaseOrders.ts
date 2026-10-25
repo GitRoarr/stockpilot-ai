@@ -4,7 +4,7 @@ import { enqueue } from '../jobs/queue.js';
 import { audit, notify, publish, type Actor } from '../lib/events.js';
 import { getSettings } from '../lib/settings.js';
 import { AppError, addDays, conflict, forbidden, id, json, localDate, now, nowIso, notFound, round2, unprocessable } from '../lib/util.js';
-import { esc, layout, onEmailOutcome, queueEmail, supplierRecipient, table, type EmailRow } from './email.js';
+import { button, esc, layout, onEmailOutcome, queueEmail, summary, supplierRecipient, table, type EmailRow } from './email.js';
 import { recordLedger, removeLedger } from './ledger.js';
 import { createPortalToken, revokePortalTokens } from './portalTokens.js';
 import { deliveryDate, getPlan, type SupplierRow } from './planning.js';
@@ -310,12 +310,25 @@ function poEmail(po: PoRow, sup: SupplierRow, link: string, reminder: boolean): 
   const subject = `${reminder ? 'Reminder: please confirm ' : ''}Purchase order ${po.number} from ${s.restaurantName}`;
   const rows = lines.map((l) => [l.sku, l.ingredient, `${l.packs} × ${l.pack_size} ${l.unit}`, `$${l.unit_price.toFixed(2)}/${l.unit}`, `$${l.line_total.toFixed(2)}`]);
   const html = layout(
-    subject,
-    `<p>Hello ${esc(sup.name)},</p><p>${reminder ? 'We have not yet received your confirmation for' : 'Please find our purchase order'} <b>${esc(po.number)}</b> for delivery on <b>${esc(po.delivery_date)}</b>.</p>
-     ${table(['SKU', 'Item', 'Quantity', 'Price', 'Line total'], rows)}
-     <p>Subtotal $${po.subtotal.toFixed(2)} · Fees $${po.fees.toFixed(2)} · <b>Total $${po.total.toFixed(2)}</b></p>
-     <p><a href="${esc(link)}" style="display:inline-block;background:#2f6f4f;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">Confirm, short or substitute items</a></p>
-     <p style="font-size:12px;color:#666">No login needed. The link is valid for 7 days and only shows this order.</p>${po.note ? `<p>Note: ${esc(po.note)}</p>` : ''}`,
+    reminder ? `Reminder: please confirm ${po.number}` : `Purchase order ${po.number}`,
+    `<p style="margin:0 0 12px">Hello ${esc(sup.name)},</p>
+     <p style="margin:0 0 16px">${reminder ? `We have not yet received your confirmation for this order. Please confirm it, or tell us what you can deliver.` : `Please find our purchase order below. Confirm it, or tell us about any shortages or substitutions, using the button at the end.`}</p>
+     ${summary([
+       ['Order', `<b>${esc(po.number)}</b>`],
+       ['Delivery date', esc(po.delivery_date ?? '—')],
+       ['Items', String(lines.length)],
+       ['Order total', `$${po.total.toFixed(2)}`],
+     ])}
+     ${table(['SKU', 'Item', 'Quantity', 'Unit price', 'Line total'], rows, [2, 3, 4])}
+     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px">
+       <tr><td style="padding:3px 10px;color:#646a66;text-align:right">Subtotal</td><td style="padding:3px 10px;text-align:right;width:110px">$${po.subtotal.toFixed(2)}</td></tr>
+       <tr><td style="padding:3px 10px;color:#646a66;text-align:right">Fees</td><td style="padding:3px 10px;text-align:right">$${po.fees.toFixed(2)}</td></tr>
+       <tr><td style="padding:6px 10px;text-align:right;font-weight:700">Total</td><td style="padding:6px 10px;text-align:right;font-weight:700">$${po.total.toFixed(2)}</td></tr>
+     </table>
+     ${po.note ? `<p style="margin:14px 0 0;padding:10px 14px;background:#fff8eb;border-radius:6px"><b>Note:</b> ${esc(po.note)}</p>` : ''}
+     ${button(link, reminder ? 'Confirm this order' : 'Confirm, short or substitute items')}
+     <p style="margin:0;font-size:12px;color:#80867f">No login needed. The link is valid for 7 days and only shows this order.</p>`,
+    { preheader: `${po.number} · delivery ${po.delivery_date} · $${po.total.toFixed(2)}`, restaurant: s.restaurantName },
   );
   const text = `${subject}\n\nDelivery: ${po.delivery_date}\n${lines.map((l) => `${l.sku} ${l.ingredient}: ${l.packs} x ${l.pack_size} ${l.unit} @ $${l.unit_price.toFixed(2)} = $${l.line_total.toFixed(2)}`).join('\n')}\nTotal: $${po.total.toFixed(2)}\n\nConfirm or report changes: ${link}`;
   return { subject, html, text };

@@ -7,7 +7,7 @@ import { audit, notify, publish, type Actor } from '../lib/events.js';
 import { getSettings } from '../lib/settings.js';
 import { conflict, id, notFound, nowIso, round2, unprocessable } from '../lib/util.js';
 import { postSystemMessage, ensureThread } from './collaboration.js';
-import { esc, layout, onEmailOutcome, queueEmail, supplierRecipient, table } from './email.js';
+import { button, esc, layout, onEmailOutcome, queueEmail, summary, supplierRecipient, table } from './email.js';
 import { recordLedger, removeLedger } from './ledger.js';
 import { createPortalToken, revokePortalTokens } from './portalTokens.js';
 
@@ -112,9 +112,16 @@ function disputeEmail(d: DisputeRow, link: string) {
   const f = facts(d.invoice_id);
   const html = layout(
     d.email_subject ?? 'Credit request',
-    `<p style="white-space:pre-wrap">${esc(d.email_body)}</p>${table(['Type', 'Detail', 'Amount'], f.variances.map((v) => [v.type.replace('_', ' '), v.description, `$${v.amount.toFixed(2)}`]))}
-     <p><b>Total credit requested: $${d.amount_claimed.toFixed(2)}</b></p>
-     <p><a href="${esc(link)}" style="display:inline-block;background:#2f6f4f;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">Accept or reject this request</a></p>`,
+    `<p style="margin:0 0 16px;white-space:pre-wrap">${esc(d.email_body)}</p>
+     ${summary([
+       ['Invoice', esc(f.invoiceNumber ?? '—')],
+       ['Purchase order', esc(f.poNumber ?? '—')],
+       ['Credit requested', `<b>$${d.amount_claimed.toFixed(2)}</b>`],
+     ])}
+     ${table(['Difference', 'Detail', 'Amount'], f.variances.map((v) => [v.type.replace('_', ' '), v.description, `$${v.amount.toFixed(2)}`]), [2])}
+     ${button(link, 'Accept or reject this request')}
+     <p style="margin:0;font-size:12px;color:#80867f">No login needed. The link only shows this request.</p>`,
+    { preheader: `Credit request $${d.amount_claimed.toFixed(2)} for invoice ${f.invoiceNumber}`, restaurant: getSettings().restaurantName },
   );
   const text = `${d.email_body}\n\n${f.variances.map((v) => `- ${v.description}: $${v.amount.toFixed(2)}`).join('\n')}\nTotal: $${d.amount_claimed.toFixed(2)}\n\nRespond: ${link}`;
   return { subject: d.email_subject ?? 'Credit request', html, text };
