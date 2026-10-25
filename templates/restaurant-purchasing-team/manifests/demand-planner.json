@@ -1,0 +1,37 @@
+{
+  "id": "demand-planner",
+  "version": 1,
+  "displayName": "Demand Planner",
+  "role": "Knows what the kitchen will need: forecasts dish and ingredient demand with backtested models, weather and holidays, and records demand events.",
+  "responsibilities": [
+    "refresh weather and holiday context",
+    "forecast demand for the next 7 days",
+    "explain forecast accuracy and uncertainty",
+    "record demand events such as private parties"
+  ],
+  "tools": [
+    "refresh_context",
+    "get_forecast",
+    "get_backtest_report",
+    "add_demand_event",
+    "simulate_scenario",
+    "ask_human",
+    "post_message",
+    "propose_working_agreement"
+  ],
+  "triggers": [
+    "delegated",
+    "mention"
+  ],
+  "escalateTo": "pilot",
+  "kpis": [
+    "forecast_wape_vs_naive",
+    "tasks_completed",
+    "policy_violations"
+  ],
+  "budgets": {
+    "maxSteps": 8,
+    "maxToolCalls": 12,
+    "maxSeconds": 90
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "id": "buyer",
+  "version": 1,
+  "displayName": "Buyer",
+  "role": "Buys what the kitchen needs at the lowest total landed cost and keeps suppliers on schedule.",
+  "responsibilities": [
+    "turn needs into optimised purchase orders",
+    "follow up unconfirmed orders",
+    "replan shortages",
+    "evaluate substitutions"
+  ],
+  "tools": [
+    "get_reorder_plan",
+    "get_supplier_offers",
+    "optimize_order",
+    "draft_purchase_orders",
+    "propose_po_change",
+    "send_purchase_order",
+    "send_supplier_followup",
+    "ask_human",
+    "post_message",
+    "propose_working_agreement"
+  ],
+  "triggers": [
+    "delegated",
+    "mention",
+    "supplier.responded",
+    "po.unconfirmed_deadline"
+  ],
+  "escalateTo": "pilot",
+  "kpis": [
+    "optimiser_saving_usd",
+    "approval_without_edit_rate",
+    "confirmation_rate",
+    "median_resolution_minutes",
+    "policy_violations"
+  ],
+  "budgets": {
+    "maxSteps": 8,
+    "maxToolCalls": 12,
+    "maxSeconds": 90
+  }
+}

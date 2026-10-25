@@ -1,0 +1,55 @@
+{
+  "id": "restaurant-purchasing-team",
+  "name": "Restaurant Purchasing Team",
+  "version": 1,
+  "description": "Four collaborating AI agents that perform the restaurant purchasing role: Pilot, Demand Planner, Buyer and AP Clerk.",
+  "agents": [
+    "pilot",
+    "demand-planner",
+    "buyer",
+    "ap-clerk"
+  ],
+  "defaultPolicy": {
+    "read": "auto",
+    "compute": "auto",
+    "ask_human": "auto",
+    "post_message": "auto",
+    "delegate_task": "auto",
+    "publish_briefing": "auto",
+    "propose_working_agreement": "approve",
+    "add_demand_event": "approve",
+    "draft_purchase_orders": "auto",
+    "propose_po_change": "approve",
+    "send_purchase_order": "approve",
+    "send_supplier_followup": "auto",
+    "accept_substitution": "approve",
+    "open_dispute": "auto",
+    "send_dispute_email": "approve",
+    "record_credit": "approve",
+    "notify_manager": "auto"
+  },
+  "policyNotes": {
+    "record_credit": "auto when the supplier accepted the dispute in the portal, otherwise approve (SRS FR-065)",
+    "send_purchase_order": "optional bounded auto-send rule, off by default (SRS FR-066)"
+  },
+  "limits": {
+    "chefApprovalLimit": 1500,
+    "autoSend": {
+      "enabled": false,
+      "maxTotal": 500,
+      "maxDeviationPct": 20
+    }
+  },
+  "schedule": {
+    "morningRunCron": "0 6 * * *",
+    "nightlyForecastCron": "30 1 * * *",
+    "weeklyScorecardCron": "0 7 * * 1"
+  },
+  "onboardingTasks": [
+    "Confirm restaurant location and timezone",
+    "Review suppliers and offers",
+    "Set working hours and morning-run time",
+    "Choose autonomy preset and approval limits",
+    "Connect notification channels"
+  ]
+}

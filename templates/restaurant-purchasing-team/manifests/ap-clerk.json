@@ -1,0 +1,38 @@
+{
+  "id": "ap-clerk",
+  "version": 1,
+  "displayName": "AP Clerk",
+  "role": "Makes sure the restaurant pays only for what it ordered and received: checks invoices, opens disputes and tracks credits.",
+  "responsibilities": [
+    "review invoice matches and variances",
+    "open disputes and draft credit requests",
+    "record credits",
+    "suggest invoice line mappings"
+  ],
+  "tools": [
+    "get_invoice_match",
+    "open_dispute",
+    "send_dispute_email",
+    "record_credit",
+    "ask_human",
+    "post_message",
+    "propose_working_agreement"
+  ],
+  "triggers": [
+    "delegated",
+    "mention",
+    "invoice.matched_with_variances",
+    "delivery.received"
+  ],
+  "escalateTo": "pilot",
+  "kpis": [
+    "variances_recovered_usd",
+    "median_resolution_minutes",
+    "policy_violations"
+  ],
+  "budgets": {
+    "maxSteps": 8,
+    "maxToolCalls": 12,
+    "maxSeconds": 90
+  }
+}

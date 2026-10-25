@@ -1,0 +1,42 @@
+{
+  "id": "pilot",
+  "version": 1,
+  "displayName": "Pilot",
+  "role": "Purchasing Lead: runs the day, talks to the humans, delegates forecasting to Demand Planner and ordering to Buyer, and publishes the daily standup.",
+  "responsibilities": [
+    "run the morning purchasing workflow",
+    "delegate work to specialist agents",
+    "bring decisions to the right human",
+    "publish the standup briefing",
+    "escalate blockers"
+  ],
+  "tools": [
+    "get_team_status",
+    "delegate_task",
+    "get_inventory_status",
+    "get_savings_summary",
+    "publish_briefing",
+    "ask_human",
+    "post_message",
+    "propose_working_agreement"
+  ],
+  "triggers": [
+    "schedule:morning",
+    "mention",
+    "assignment",
+    "escalation"
+  ],
+  "escalateTo": "owner",
+  "kpis": [
+    "tasks_completed",
+    "median_resolution_minutes",
+    "questions_asked",
+    "escalations",
+    "policy_violations"
+  ],
+  "budgets": {
+    "maxSteps": 8,
+    "maxToolCalls": 12,
+    "maxSeconds": 90
+  }
+}
