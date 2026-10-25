@@ -1,0 +1,12 @@
+node_modules/
+dist/
+data/*.db
+data/*.db-*
+data/uploads/
+.env
+coverage/
+playwright-report/
+test-results/
+
+# Specs and approval documents are kept locally, not in the code repository
+docs/
