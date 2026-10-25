@@ -1,0 +1,23 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      # Recorded agent evals: fails on any policy violation or grounding failure (NFR-QA-1).
+      - run: npm run eval
+      - run: npm run build
+      # Browser E2E of the demo path with the runner's Google Chrome (no keys, offline seed).
+      - run: npx playwright test
