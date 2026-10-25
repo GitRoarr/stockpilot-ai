@@ -1,0 +1,45 @@
+{
+  "name": "14-invoice-price-over-short",
+  "group": "invoices",
+  "description": "Sample invoice INV-GG-20817 after a 30 lb delivery: $9.60 + $32.50 \u2192 dispute $42.10 drafted, send proposed.",
+  "steps": [
+    {
+      "do": "morning"
+    },
+    {
+      "do": "approve",
+      "tool": "send_purchase_order",
+      "includes": "Golden Gate"
+    },
+    {
+      "do": "portal",
+      "supplier": "Golden Gate",
+      "lines": {
+        "GG-23310": {
+          "action": "reduce",
+          "qty": 30
+        }
+      }
+    },
+    {
+      "do": "receive",
+      "supplier": "Golden Gate"
+    },
+    {
+      "do": "invoice",
+      "supplier": "Golden Gate"
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT amount_claimed FROM disputes",
+      "equals": 42.1
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM agent_actions WHERE tool='send_dispute_email' AND status='proposed'",
+      "equals": 1
+    }
+  ]
+}

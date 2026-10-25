@@ -1,0 +1,47 @@
+{
+  "name": "16-invoice-math-error",
+  "group": "invoices",
+  "description": "40 \u00d7 $3.25 extracted as $103.00 \u2192 math_error flagged for confirmation.",
+  "steps": [
+    {
+      "do": "morning"
+    },
+    {
+      "do": "approve",
+      "tool": "send_purchase_order",
+      "includes": "Golden Gate"
+    },
+    {
+      "do": "receive",
+      "supplier": "Golden Gate"
+    },
+    {
+      "do": "invoice",
+      "supplier": "Golden Gate",
+      "confirm": false,
+      "extraction": {
+        "lines": [
+          {
+            "description": "Chicken thigh, boneless",
+            "sku": "GG-23310",
+            "qty": 40,
+            "unit": "lb",
+            "unitPrice": 3.25,
+            "extended": 103,
+            "confidence": 0.9
+          }
+        ],
+        "subtotal": 103,
+        "deliveryFee": 25,
+        "total": 128
+      }
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM invoices WHERE status='needs_review' AND issues_json LIKE '%math_error%'",
+      "equals": 1
+    }
+  ]
+}

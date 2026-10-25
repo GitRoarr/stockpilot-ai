@@ -1,0 +1,72 @@
+{
+  "name": "15-invoice-clean",
+  "group": "invoices",
+  "description": "Invoice that matches order and delivery: matched, no dispute.",
+  "steps": [
+    {
+      "do": "morning"
+    },
+    {
+      "do": "approve",
+      "tool": "send_purchase_order",
+      "includes": "Golden Gate"
+    },
+    {
+      "do": "portal",
+      "supplier": "Golden Gate"
+    },
+    {
+      "do": "receive",
+      "supplier": "Golden Gate"
+    },
+    {
+      "do": "invoice",
+      "supplier": "Golden Gate",
+      "extraction": {
+        "lines": [
+          {
+            "description": "Beef patty 6 oz",
+            "sku": "GG-44120",
+            "qty": 96,
+            "unit": "each",
+            "unitPrice": 1.52,
+            "extended": 145.92,
+            "confidence": 0.97
+          },
+          {
+            "description": "Chicken thigh, boneless",
+            "sku": "GG-23310",
+            "qty": 40,
+            "unit": "lb",
+            "unitPrice": 3.25,
+            "extended": 130,
+            "confidence": 0.96
+          },
+          {
+            "description": "Fries 3/8\" frozen",
+            "sku": "GG-81002",
+            "qty": 60,
+            "unit": "lb",
+            "unitPrice": 1.1,
+            "extended": 66,
+            "confidence": 0.97
+          }
+        ],
+        "subtotal": 341.92,
+        "total": 366.92
+      }
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT status FROM invoices",
+      "equals": "matched"
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM disputes",
+      "equals": 0
+    }
+  ]
+}

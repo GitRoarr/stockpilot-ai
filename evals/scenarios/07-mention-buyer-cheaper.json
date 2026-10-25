@@ -1,0 +1,25 @@
+{
+  "name": "07-mention-buyer-cheaper",
+  "group": "collaboration",
+  "description": "@Buyer in an ingredient thread: run in that thread with the chef's authority; reply cites the optimiser.",
+  "steps": [
+    {
+      "do": "chat",
+      "threadType": "ingredient",
+      "threadId": "ing_thigh",
+      "body": "@Buyer find a cheaper supplier for chicken thigh"
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM messages WHERE author_id='buyer' AND body LIKE '%Optimiser result%'",
+      "equals": 1
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT authority_role FROM agent_runs WHERE trigger='mention'",
+      "equals": "chef"
+    }
+  ]
+}

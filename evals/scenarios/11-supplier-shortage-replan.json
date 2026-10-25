@@ -1,0 +1,32 @@
+{
+  "name": "11-supplier-shortage-replan",
+  "group": "suppliers",
+  "description": "Golden Gate confirms 30 of 40 lb chicken \u2192 Bay Meat supplementary PO $49.00 needs approval.",
+  "steps": [
+    {
+      "do": "morning"
+    },
+    {
+      "do": "approve",
+      "tool": "send_purchase_order",
+      "includes": "Golden Gate"
+    },
+    {
+      "do": "portal",
+      "supplier": "Golden Gate",
+      "lines": {
+        "GG-23310": {
+          "action": "reduce",
+          "qty": 30
+        }
+      }
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM agent_actions WHERE status='proposed' AND tool='send_purchase_order' AND summary LIKE '%Bay Meat Supply%$49.00%'",
+      "equals": 1
+    }
+  ]
+}

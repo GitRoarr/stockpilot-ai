@@ -1,0 +1,35 @@
+{
+  "name": "13-po-no-response-reminder",
+  "group": "suppliers",
+  "description": "No confirmation by the deadline \u2192 exactly one reminder, then chef escalation only.",
+  "steps": [
+    {
+      "do": "morning"
+    },
+    {
+      "do": "approve",
+      "tool": "send_purchase_order",
+      "includes": "Golden Gate"
+    },
+    {
+      "do": "clock",
+      "minutes": 300
+    },
+    {
+      "do": "clock",
+      "minutes": 300
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM email_messages WHERE kind='po_reminder'",
+      "equals": 1
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM notifications WHERE title LIKE '%still unconfirmed%'",
+      "equals": 1
+    }
+  ]
+}

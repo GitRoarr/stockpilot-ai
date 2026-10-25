@@ -1,0 +1,204 @@
+{
+  "name": "01-morning-ai-delegation",
+  "group": "morning",
+  "description": "Recorded AI morning run: Pilot delegates forecast then ordering; POs equal the engine output; standup is AI and grounded.",
+  "recordings": [
+    {
+      "kind": "chat",
+      "agent": "Pilot",
+      "calls": [
+        {
+          "name": "get_team_status",
+          "args": {}
+        },
+        {
+          "name": "get_inventory_status",
+          "args": {}
+        }
+      ]
+    },
+    {
+      "kind": "chat",
+      "agent": "Pilot",
+      "calls": [
+        {
+          "name": "delegate_task",
+          "args": {
+            "agent": "demand-planner",
+            "goal": "Refresh context and forecast the next 7 days"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "chat",
+      "agent": "Demand Planner",
+      "calls": [
+        {
+          "name": "refresh_context",
+          "args": {}
+        },
+        {
+          "name": "get_forecast",
+          "args": {
+            "days": 7
+          }
+        }
+      ]
+    },
+    {
+      "kind": "chat",
+      "agent": "Demand Planner",
+      "text": "Forecast is ready for every dish."
+    },
+    {
+      "kind": "chat",
+      "agent": "Pilot",
+      "calls": [
+        {
+          "name": "delegate_task",
+          "args": {
+            "agent": "buyer",
+            "goal": "Plan and draft today's orders"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "chat",
+      "agent": "Buyer",
+      "calls": [
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        }
+      ]
+    },
+    {
+      "kind": "chat",
+      "agent": "Buyer",
+      "calls": [
+        {
+          "name": "optimize_order",
+          "args": {
+            "scope": "all"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "chat",
+      "agent": "Buyer",
+      "calls": [
+        {
+          "name": "draft_purchase_orders",
+          "args": {
+            "planId": "{{optimize_order.planId}}"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "chat",
+      "agent": "Buyer",
+      "calls": [
+        {
+          "name": "send_purchase_order",
+          "forEach": "draft_purchase_orders.purchaseOrders",
+          "args": {
+            "poId": "{{item.poId}}"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "chat",
+      "agent": "Buyer",
+      "text": "Orders drafted with the optimiser; sending needs approval."
+    },
+    {
+      "kind": "chat",
+      "agent": "Pilot",
+      "calls": [
+        {
+          "name": "publish_briefing",
+          "args": {}
+        }
+      ]
+    },
+    {
+      "kind": "structured",
+      "json": {
+        "summary": "Orders are drafted and waiting for approval in the Inbox.",
+        "agents": [
+          {
+            "agentId": "buyer",
+            "done": [
+              {
+                "text": "Drafted optimised orders"
+              }
+            ],
+            "today": [],
+            "needsYou": [
+              {
+                "text": "Approve the orders"
+              }
+            ]
+          }
+        ],
+        "wasteReductionIdeas": [],
+        "risks": [],
+        "confidence": "high"
+      }
+    },
+    {
+      "kind": "chat",
+      "agent": "Pilot",
+      "text": "Morning run complete and the standup is published."
+    }
+  ],
+  "steps": [
+    {
+      "do": "morning"
+    }
+  ],
+  "assert": [
+    {
+      "expect": "toolSequence",
+      "agent": "pilot",
+      "tools": [
+        "get_team_status",
+        "delegate_task",
+        "delegate_task",
+        "publish_briefing"
+      ]
+    },
+    {
+      "expect": "toolSequence",
+      "agent": "buyer",
+      "tools": [
+        "get_reorder_plan",
+        "optimize_order",
+        "draft_purchase_orders",
+        "send_purchase_order"
+      ]
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT total FROM purchase_orders WHERE supplier_id = 'sup_gg' AND status = 'pending_approval'",
+      "equals": 366.92,
+      "label": "Golden Gate PO total"
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT mode FROM briefings",
+      "equals": "ai"
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM tasks WHERE parent_id = (SELECT task_id FROM agent_runs WHERE playbook='morning')",
+      "equals": 2,
+      "label": "delegated child tasks"
+    }
+  ]
+}

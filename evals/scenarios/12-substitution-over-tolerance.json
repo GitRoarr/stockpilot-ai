@@ -1,0 +1,38 @@
+{
+  "name": "12-substitution-over-tolerance",
+  "group": "suppliers",
+  "description": "Substitute +8% over price: flagged above the 5% tolerance and never auto-accepted.",
+  "steps": [
+    {
+      "do": "morning"
+    },
+    {
+      "do": "sendPo",
+      "supplier": "Mission"
+    },
+    {
+      "do": "portal",
+      "supplier": "Mission",
+      "lines": {
+        "MP-ROM24": {
+          "substitute": {
+            "description": "Romaine, other grower",
+            "packSize": 24,
+            "premiumPct": 8
+          }
+        }
+      }
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM agent_actions WHERE tool='accept_substitution' AND json_extract(args_json,'$.flagged')=1",
+      "equals": 1
+    },
+    {
+      "expect": "noToolExecuted",
+      "tool": "accept_substitution"
+    }
+  ]
+}

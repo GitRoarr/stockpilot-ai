@@ -1,0 +1,46 @@
+{
+  "name": "09-agreement-from-rejections",
+  "group": "collaboration",
+  "description": "Chef rejects two fish proposals for Golden Gate \u2192 Buyer proposes exclude_supplier with the evidence.",
+  "steps": [
+    {
+      "do": "insertProposal",
+      "id": "act_f1",
+      "tool": "draft_purchase_orders",
+      "summary": "Fish order 1"
+    },
+    {
+      "do": "reject",
+      "tool": "draft_purchase_orders",
+      "includes": "Fish order 1",
+      "reason": "No fish from Golden Gate",
+      "tags": {
+        "supplierId": "sup_gg",
+        "category": "fish"
+      }
+    },
+    {
+      "do": "insertProposal",
+      "id": "act_f2",
+      "tool": "draft_purchase_orders",
+      "summary": "Fish order 2"
+    },
+    {
+      "do": "reject",
+      "tool": "draft_purchase_orders",
+      "includes": "Fish order 2",
+      "reason": "No fish from Golden Gate",
+      "tags": {
+        "supplierId": "sup_gg",
+        "category": "fish"
+      }
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM working_agreements WHERE type='exclude_supplier' AND status='proposed' AND json_extract(params_json,'$.category')='fish'",
+      "equals": 1
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "name": "04-morning-model-fails-midway",
+  "group": "morning",
+  "description": "Model errors after the first step: the run switches to the fixed pipeline and still drafts the orders.",
+  "live": "skip",
+  "recordings": [
+    {
+      "kind": "chat",
+      "agent": "Pilot",
+      "calls": [
+        {
+          "name": "get_team_status",
+          "args": {}
+        }
+      ]
+    },
+    {
+      "kind": "error",
+      "status": 500
+    },
+    {
+      "kind": "error",
+      "status": 500
+    },
+    {
+      "kind": "error",
+      "status": 500
+    }
+  ],
+  "steps": [
+    {
+      "do": "morning"
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT fallback_reason FROM agent_runs WHERE playbook='morning'",
+      "equals": "model_error"
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT total FROM purchase_orders WHERE supplier_id = 'sup_gg' AND status = 'pending_approval'",
+      "equals": 366.92
+    }
+  ]
+}

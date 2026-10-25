@@ -1,0 +1,23 @@
+{
+  "name": "10-explicit-instruction",
+  "group": "collaboration",
+  "description": "\"Never order fish from Golden Gate\" in a thread \u2192 agreement proposed (Owner approval).",
+  "steps": [
+    {
+      "do": "chat",
+      "body": "@Buyer never order fish from Golden Gate"
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM working_agreements WHERE type='exclude_supplier' AND json_extract(params_json,'$.supplierId')='sup_gg'",
+      "equals": 1
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM working_agreements WHERE status='active'",
+      "equals": 0
+    }
+  ]
+}

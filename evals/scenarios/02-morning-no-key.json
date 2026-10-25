@@ -1,0 +1,27 @@
+{
+  "name": "02-morning-no-key",
+  "group": "morning",
+  "description": "No Gemini key: same workflow as a deterministic pipeline, rule-based standup labelled no_api_key.",
+  "steps": [
+    {
+      "do": "morning"
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT total FROM purchase_orders WHERE supplier_id = 'sup_gg' AND status = 'pending_approval'",
+      "equals": 366.92
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT reason FROM briefings",
+      "equals": "no_api_key"
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT mode FROM agent_runs WHERE playbook='morning'",
+      "equals": "deterministic"
+    }
+  ]
+}

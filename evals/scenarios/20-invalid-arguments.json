@@ -1,0 +1,44 @@
+{
+  "name": "20-invalid-arguments",
+  "group": "safety",
+  "description": "Invalid tool arguments \u2192 structured validation error, budget consumed, nothing executed.",
+  "live": "skip",
+  "recordings": [
+    {
+      "kind": "chat",
+      "agent": "Buyer",
+      "calls": [
+        {
+          "name": "optimize_order",
+          "args": {
+            "scope": "everything"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "chat",
+      "agent": "Buyer",
+      "text": "I could not run the optimiser with those arguments."
+    }
+  ],
+  "steps": [
+    {
+      "do": "agentRun",
+      "agent": "buyer",
+      "goal": "Optimise everything"
+    }
+  ],
+  "assert": [
+    {
+      "expect": "toolResultError",
+      "tool": "optimize_order",
+      "error": "validation_error"
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM plans",
+      "equals": 0
+    }
+  ]
+}

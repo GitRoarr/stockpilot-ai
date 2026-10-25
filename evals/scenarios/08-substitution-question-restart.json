@@ -1,0 +1,52 @@
+{
+  "name": "08-substitution-question-restart",
+  "group": "collaboration",
+  "description": "Buyer asks about organic romaine (+$0.40/lb); restart while waiting; chef answers No; resumes once; substitution rejected.",
+  "steps": [
+    {
+      "do": "morning"
+    },
+    {
+      "do": "sendPo",
+      "supplier": "Mission"
+    },
+    {
+      "do": "portal",
+      "supplier": "Mission",
+      "lines": {
+        "MP-ROM24": {
+          "substitute": {
+            "description": "Organic romaine hearts",
+            "packSize": 24,
+            "unitPrice": 2.5
+          }
+        }
+      }
+    },
+    {
+      "do": "restart"
+    },
+    {
+      "do": "answer",
+      "includes": "Organic romaine",
+      "answer": "No"
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT status FROM agent_actions WHERE tool='accept_substitution'",
+      "equals": "rejected"
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM questions",
+      "equals": 1
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT status FROM agent_runs WHERE trigger='supplier.responded'",
+      "equals": "completed"
+    }
+  ]
+}

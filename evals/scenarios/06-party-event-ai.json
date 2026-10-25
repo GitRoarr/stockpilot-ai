@@ -1,0 +1,70 @@
+{
+  "name": "06-party-event-ai",
+  "group": "collaboration",
+  "description": "Recorded AI: Pilot delegates the event to Demand Planner, who proposes it (policy: approve).",
+  "recordings": [
+    {
+      "kind": "chat",
+      "agent": "Pilot",
+      "calls": [
+        {
+          "name": "delegate_task",
+          "args": {
+            "agent": "demand-planner",
+            "goal": "Record the private party of 40 in three days, mostly burgers"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "chat",
+      "agent": "Demand Planner",
+      "calls": [
+        {
+          "name": "add_demand_event",
+          "args": {
+            "date": "{{today+3}}",
+            "description": "Private party",
+            "extraCovers": 40,
+            "items": [
+              {
+                "menuItem": "Classic Burger",
+                "qty": 20
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "chat",
+      "agent": "Demand Planner",
+      "text": "The event is proposed and waits for approval."
+    },
+    {
+      "kind": "chat",
+      "agent": "Pilot",
+      "text": "Demand Planner proposed the event; approve it in the Inbox."
+    }
+  ],
+  "steps": [
+    {
+      "do": "chat",
+      "body": "Private party of 40 in three days, mostly burgers"
+    }
+  ],
+  "assert": [
+    {
+      "expect": "toolSequence",
+      "agent": "demand-planner",
+      "tools": [
+        "add_demand_event"
+      ]
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM agent_actions WHERE tool='add_demand_event' AND status='proposed'",
+      "equals": 1
+    }
+  ]
+}

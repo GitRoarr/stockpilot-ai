@@ -1,0 +1,18 @@
+{
+  "name": "05-party-event-no-key",
+  "group": "collaboration",
+  "description": "\"Private party of 40 on Saturday, mostly burgers\" without a key: rule-based parsing \u2192 demand-event proposal.",
+  "steps": [
+    {
+      "do": "chat",
+      "body": "Private party of 40 on Saturday, mostly burgers"
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM agent_actions WHERE tool='add_demand_event' AND status='proposed' AND summary LIKE '%40 extra covers%'",
+      "equals": 1
+    }
+  ]
+}

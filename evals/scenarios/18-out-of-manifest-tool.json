@@ -1,0 +1,44 @@
+{
+  "name": "18-out-of-manifest-tool",
+  "group": "safety",
+  "description": "AP Clerk tries send_purchase_order \u2192 tool_not_permitted, no action created.",
+  "live": "skip",
+  "recordings": [
+    {
+      "kind": "chat",
+      "agent": "AP Clerk",
+      "calls": [
+        {
+          "name": "send_purchase_order",
+          "args": {
+            "poId": "po_x"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "chat",
+      "agent": "AP Clerk",
+      "text": "That is not one of my tools."
+    }
+  ],
+  "steps": [
+    {
+      "do": "agentRun",
+      "agent": "ap-clerk",
+      "goal": "Send the Golden Gate order"
+    }
+  ],
+  "assert": [
+    {
+      "expect": "toolResultError",
+      "tool": "send_purchase_order",
+      "error": "tool_not_permitted"
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM agent_actions",
+      "equals": 0
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "name": "19-budget-exhaustion",
+  "group": "safety",
+  "description": "A model that keeps calling tools stops at 12 tool calls with budget_exhausted.",
+  "live": "skip",
+  "recordings": [
+    {
+      "kind": "chat",
+      "agent": "Buyer",
+      "calls": [
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        },
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        },
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        },
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        },
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        },
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        },
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        }
+      ]
+    },
+    {
+      "kind": "chat",
+      "agent": "Buyer",
+      "calls": [
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        },
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        },
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        },
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        },
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        },
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        },
+        {
+          "name": "get_reorder_plan",
+          "args": {}
+        }
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "do": "agentRun",
+      "agent": "buyer",
+      "goal": "Check the plan again and again"
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT status FROM agent_runs WHERE agent_id='buyer'",
+      "equals": "budget_exhausted"
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM agent_actions",
+      "equals": 0
+    }
+  ]
+}

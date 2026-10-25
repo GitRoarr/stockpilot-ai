@@ -1,0 +1,25 @@
+{
+  "name": "03-morning-holiday-tomorrow",
+  "group": "morning",
+  "description": "A public holiday tomorrow is flagged in the Demand Planner's standup.",
+  "steps": [
+    {
+      "do": "holidayTomorrow"
+    },
+    {
+      "do": "morning"
+    }
+  ],
+  "assert": [
+    {
+      "expect": "sql",
+      "query": "SELECT COUNT(*) FROM briefings WHERE briefing_json LIKE '%Holiday tomorrow: Eval Day%'",
+      "equals": 1
+    },
+    {
+      "expect": "sql",
+      "query": "SELECT status FROM agent_runs WHERE playbook='morning'",
+      "equals": "completed"
+    }
+  ]
+}
