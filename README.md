@@ -65,6 +65,17 @@ All variables are listed in [`.env.example`](.env.example). Secrets live only in
 | `DEMO_MODE` | no | Enables reset workspace data and the simulated clock (Settings → Data & clock) |
 | `SCHEDULER_ENABLED`, `WORKER_ENABLED` | no | Turn off the automatic morning run / the job worker |
 
+## Deploying to Render (free web service)
+
+| Setting | Value |
+|---|---|
+| Build command | `npm ci --include=dev && npm run build` |
+| Start command | `npm run start` |
+| Health check path | `/api/health` |
+| Environment | `NODE_VERSION=24`, `HOST=0.0.0.0`, `NODE_ENV=production`, `SESSION_SECRET` (32+ random characters), `APP_BASE_URL=https://<service>.onrender.com`, `DEMO_MODE=true`, plus the Gemini and Brevo variables above |
+
+Render sets `PORT`. On the first start the empty database is seeded automatically (`SEED_IF_EMPTY`). The free plan's disk is temporary: data resets to the starting restaurant when the service restarts or redeploys, and the service sleeps after about 15 minutes idle (the first request then takes a little while).
+
 ## API setup (all free, billing disabled)
 
 | Service | Key | Setup |

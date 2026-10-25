@@ -18,6 +18,10 @@ const optional = z
 
 const EnvSchema = z.object({
   PORT: z.coerce.number().int().default(8787),
+  // 127.0.0.1 keeps a local install private; hosts such as Render need 0.0.0.0.
+  HOST: z.string().default('127.0.0.1'),
+  // First start on an empty database (e.g. a fresh cloud instance) loads the starting restaurant data.
+  SEED_IF_EMPTY: bool(true),
   DATABASE_PATH: z.string().default(path.join(REPO_ROOT, 'data/stockpilot.db')),
   TZ: z.string().default('America/Los_Angeles'),
   SESSION_SECRET: optional,

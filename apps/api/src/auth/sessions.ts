@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Role } from '@stockpilot/shared';
+import { config } from '../config.js';
 import { db } from '../db/sqlite.js';
 import { AppError, forbidden, id, nowIso, sha256 } from '../lib/util.js';
 
@@ -41,7 +42,8 @@ export function setSessionCookie(reply: FastifyReply, token: string, expiresAt: 
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
-    secure: false,
+    // Secure cookies when the app is served over HTTPS (APP_BASE_URL), plain HTTP for local use.
+    secure: config.APP_BASE_URL.startsWith('https://'),
     signed: true,
     expires: new Date(expiresAt),
   });
