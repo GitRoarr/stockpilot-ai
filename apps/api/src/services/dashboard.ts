@@ -2,7 +2,7 @@ import { db } from '../db/sqlite.js';
 import { latestBriefing } from '../agents/briefing.js';
 import { aiAvailable, modelCallStats } from '../agents/llm/gateway.js';
 import { getSettings } from '../lib/settings.js';
-import { localDate, nowIso } from '../lib/util.js';
+import { addDays, localDate, nowIso } from '../lib/util.js';
 import { getForecast } from './forecast.js';
 import { ledgerSummary } from './ledger.js';
 import { computeNeeds } from './planning.js';
@@ -48,6 +48,20 @@ export function dashboard() {
     ai: { available: ai.ok, reason: ai.reason ?? null, ...modelCallStats() },
     purchasing: purchasing(),
     supplierIssues: supplierIssues(),
+    deliveries: deliveries(),
+    receiving: receivingIssues(),
+    trends: trends(fc),
+    spendBySupplier: db().all<{ supplier: string; total: number; orders: number }>(
+      `SELECT s.name AS supplier, ROUND(SUM(p.total), 2) AS total, COUNT(*) AS orders FROM purchase_orders p JOIN suppliers s ON s.id = p.supplier_id
+       WHERE p.status IN ('pending_approval','approved','sent','confirmed','partially_confirmed') GROUP BY s.name ORDER BY total DESC`,
+    ),
+    inventoryHealth: {
+      ok: needs.filter((n) => n.trace.status === 'ok').length,
+      low: needs.filter((n) => n.trace.status === 'low').length,
+      critical: needs.filter((n) => n.trace.status === 'critical').length,
+      expiring: needs.filter((n) => n.valueAtRisk > 0).length,
+      total: needs.length,
+    },
     agentActivity: db().all<any>(
       `SELECT id, agent_id AS agentId, trigger, goal, status, mode, fallback_reason AS fallbackReason, parent_run_id AS parentRunId, steps_used AS steps, started_at AS startedAt, ended_at AS endedAt
        FROM agent_runs ORDER BY started_at DESC LIMIT 12`,
@@ -91,4 +105,50 @@ function supplierIssues() {
     else if (r.delivery_date === today) out.push({ poId: r.id, number: r.number, supplier: r.supplier, kind: 'due_today', severity: 'blue', detail: 'Delivery due today' });
   }
   return out;
+}
+
+/** Orders due in the next two days (sent or confirmed), for the receiving plan. */
+function deliveries() {
+  const today = localDate();
+  return db().all<any>(
+    `SELECT p.id, p.number, s.name AS supplier, p.status, p.delivery_date AS deliveryDate, p.eta, p.total,
+       (SELECT COUNT(*) FROM po_lines l WHERE l.purchase_order_id = p.id AND l.packs > 0) AS lines
+     FROM purchase_orders p JOIN suppliers s ON s.id = p.supplier_id
+     WHERE p.status IN ('sent','confirmed','partially_confirmed','partially_received') AND p.delivery_date <= ?
+     ORDER BY p.delivery_date, p.number`,
+    addDays(today, 2),
+  );
+}
+
+/** Invoices whose three-way match found differences, and disputes still open, with the money involved. */
+function receivingIssues() {
+  const invoices = db().all<any>(
+    `SELECT i.id, i.number, s.name AS supplier, i.status, i.total, (SELECT COALESCE(SUM(v.amount), 0) FROM variances v WHERE v.invoice_id = i.id) AS variance,
+       (SELECT d.id FROM disputes d WHERE d.invoice_id = i.id ORDER BY d.created_at DESC LIMIT 1) AS disputeId
+     FROM invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE i.status IN ('needs_review','variances','disputed') ORDER BY i.created_at DESC LIMIT 8`,
+  );
+  const disputes = db().all<any>(
+    `SELECT d.id, d.number, s.name AS supplier, d.status, d.amount_claimed AS claimed FROM disputes d JOIN suppliers s ON s.id = d.supplier_id
+     WHERE d.status IN ('draft','sent','acknowledged') ORDER BY d.created_at DESC`,
+  );
+  return { invoices, disputes };
+}
+
+/** Daily series for the dashboard charts: actual portions sold (28 completed days), the 7-day forecast and order spend. */
+function trends(fc: ReturnType<typeof getForecast>) {
+  const today = localDate();
+  const days = Array.from({ length: 28 }, (_, i) => addDays(today, i - 28));
+  const sold = new Map(db().all<{ date: string; qty: number }>(`SELECT date, SUM(qty) AS qty FROM sales_records WHERE date >= ? AND date < ? GROUP BY date`, days[0], today).map((r) => [r.date, r.qty]));
+  const spend = new Map(
+    db()
+      .all<{ date: string; total: number }>(`SELECT substr(created_at, 1, 10) AS date, SUM(total) AS total FROM purchase_orders WHERE status <> 'cancelled' AND substr(created_at, 1, 10) >= ? GROUP BY 1`, days[0])
+      .map((r) => [r.date, r.total]),
+  );
+  const forecast = new Map<string, number>();
+  for (const item of fc.items) for (const d of item.daily) forecast.set(d.date, (forecast.get(d.date) ?? 0) + d.value);
+  return {
+    sales: days.map((date) => ({ date, value: sold.get(date) ?? 0 })),
+    forecast: [...forecast.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, v]) => ({ date, value: Math.round(v) })),
+    orderSpend: [...days, today].map((date) => ({ date, value: Math.round((spend.get(date) ?? 0) * 100) / 100 })),
+  };
 }

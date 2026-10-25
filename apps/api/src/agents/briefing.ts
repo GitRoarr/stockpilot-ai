@@ -5,7 +5,7 @@ import { checkGrounding } from '../engines/grounding.js';
 import { notify, publish } from '../lib/events.js';
 import { getSettings } from '../lib/settings.js';
 import { addDays, id, json, localDate, nowIso } from '../lib/util.js';
-import { esc, layout, queueEmail } from '../services/email.js';
+import { button, esc, layout, queueEmail } from '../services/email.js';
 import { getForecast } from '../services/forecast.js';
 import { ledgerSummary } from '../services/ledger.js';
 import { computeNeeds } from '../services/planning.js';
@@ -105,7 +105,7 @@ export function ruleBasedBriefing(f: BriefingFacts): Briefing {
   });
   const decisions = f.proposals.length + f.questions.length;
   return {
-    summary: `${f.ordersDrafted.length} order(s) prepared totalling ${usd(f.ordersTotal)}${f.savingTotal > 0 ? `, saving ${usd(f.savingTotal)} vs preferred suppliers` : ''}. ${decisions ? `${decisions} decision(s) need you.` : 'Nothing needs you right now.'}${f.critical.length ? ` Critical: ${f.critical.map((c) => c.name).join(', ')}.` : ''}`,
+    summary: `${f.ordersDrafted.length} ${f.ordersDrafted.length === 1 ? 'order' : 'orders'} prepared totalling ${usd(f.ordersTotal)}${f.savingTotal > 0 ? `, saving ${usd(f.savingTotal)} vs preferred suppliers` : ''}. ${decisions ? `${decisions} ${decisions === 1 ? 'decision needs' : 'decisions need'} you.` : 'Nothing needs you right now.'}${f.critical.length ? ` Critical: ${f.critical.map((c) => c.name).join(', ')}.` : ''}`,
     agents: [
       { agentId: 'pilot', done: [{ text: 'Ran the morning purchasing review and delegated forecasting and ordering' }], today: [{ text: 'Watch supplier confirmations and escalate blockers' }], ...byAgent('pilot') },
       {
@@ -223,12 +223,19 @@ export async function publishBriefing(run: RunInfo, note?: string) {
 function briefingEmail(b: Briefing, mode: string, reason?: string) {
   const names: Record<string, string> = { pilot: 'Pilot', 'demand-planner': 'Demand Planner', buyer: 'Buyer', 'ap-clerk': 'AP Clerk' };
   const link = config.APP_BASE_URL;
-  const sec = (title: string, items: { text: string }[]) => (items.length ? `<p style="margin:6px 0 2px"><b>${title}</b></p><ul style="margin:0">${items.map((i) => `<li>${esc(i.text)}</li>`).join('')}</ul>` : '');
+  const sec = (title: string, items: { text: string }[], color = '#2b302d') => (items.length ? `<p style="margin:8px 0 2px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#80867f">${title}</p><ul style="margin:0;padding-left:18px;color:${color}">${items.map((i) => `<li style="margin:2px 0">${esc(i.text)}</li>`).join('')}</ul>` : '');
   const html = layout(
     `Standup — ${localDate()}`,
-    `<p>${esc(b.summary)}</p>${b.agents.map((a) => `<h3 style="margin:14px 0 4px">${names[a.agentId]}</h3>${a.needsYou.length + a.done.length + a.today.length ? `${sec('Needs you', a.needsYou)}${sec('Done', a.done)}${sec('Today', a.today)}` : '<p style="color:#666">Nothing to report today.</p>'}`).join('')}
-     ${b.wasteReductionIdeas.length ? `<h3>Waste-reduction ideas</h3><ul>${b.wasteReductionIdeas.map((w) => `<li>${esc(w.text)}</li>`).join('')}</ul>` : ''}
-     <p><a href="${esc(link)}/inbox">Open the Inbox</a> · Briefing: ${mode === 'ai' ? 'AI' : `rule-based (${esc(reason)})`}</p>`,
+    `<p style="margin:0 0 16px;padding:12px 14px;background:#f6f5f1;border-radius:8px">${esc(b.summary)}</p>${b.agents
+      .map(
+        (a) =>
+          `<div style="padding:12px 0;border-top:1px solid #f0eee8"><p style="margin:0;font-size:14px;font-weight:650">${names[a.agentId]}</p>${a.needsYou.length + a.done.length + a.today.length ? `${sec('Needs you', a.needsYou, '#8a4807')}${sec('Done', a.done)}${sec('Today', a.today)}` : '<p style="margin:4px 0 0;color:#80867f">Nothing to report today.</p>'}</div>`,
+      )
+      .join('')}
+     ${b.wasteReductionIdeas.length ? `<div style="padding:12px 0;border-top:1px solid #f0eee8">${sec('Recommendations', b.wasteReductionIdeas)}</div>` : ''}
+     ${button(`${link}/inbox`, 'Open the Inbox')}
+     <p style="margin:0;font-size:12px;color:#80867f">Written ${mode === 'ai' ? 'by the AI team' : `by the rule-based pipeline (${esc(reason)})`}; every number comes from StockPilot's engines.</p>`,
+    { preheader: b.summary.slice(0, 120), restaurant: getSettings().restaurantName },
   );
   const text = `${b.summary}\n\n${b.agents.map((a) => `${names[a.agentId]}\n${[...a.needsYou.map((i) => `! ${i.text}`), ...a.done.map((i) => `✓ ${i.text}`), ...a.today.map((i) => `→ ${i.text}`)].join('\n') || 'Nothing to report today.'}`).join('\n\n')}\n\n${link}/inbox`;
   return { subject: `StockPilot standup ${localDate()}${b.agents.some((a) => a.needsYou.length) ? ' — decisions waiting' : ''}`, html, text };
