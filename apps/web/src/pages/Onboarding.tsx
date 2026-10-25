@@ -74,7 +74,7 @@ export function OnboardingPage({ me }: { me: Me }) {
         <div className="mt-6">
           <ol className="mb-4 flex flex-wrap gap-2 text-xs">
             {STEPS.map((s, i) => (
-              <li key={s} className={cx('rounded-full border px-3 py-1', i === step ? 'border-accent bg-blue-50 text-accent' : i < step ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-line text-muted')}>
+              <li key={s} className={cx('rounded-full border px-3 py-1', i === step ? 'border-accent bg-accent-soft text-accent' : i < step ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-line text-muted')}>
                 {i + 1}. {s}
               </li>
             ))}

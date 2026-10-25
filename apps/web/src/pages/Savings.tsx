@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { CircleDollarSign, Clock, Hourglass, PiggyBank, Receipt, ShieldCheck } from 'lucide-react';
+import { Calculator, CircleDollarSign, Clock, Hourglass, PiggyBank, Receipt, ShieldCheck } from 'lucide-react';
 import { api } from '../api/client';
-import { Badge, Card, dt, Empty, PageHeader, Q, Table, Tabs, usd } from '../components/ui';
+import { Badge, Card, cx, dt, Empty, PageHeader, pct, Q, Table, Tabs, usd } from '../components/ui';
 
 // Savings ledger (FR-095 – FR-097): realized (verified) and projected amounts are separate panels and never summed.
 const LINK: Record<string, (id: string) => string> = { purchase_order: (id) => `/orders/${id}`, dispute: (id) => `/disputes/${id}` };
@@ -24,6 +24,7 @@ const TYPE_LABEL: Record<string, string> = {
 export function SavingsPage() {
   const q = useQuery({ queryKey: ['ledger'], queryFn: () => api<any>('/ledger') });
   const dash = useQuery({ queryKey: ['dashboard'], queryFn: () => api<any>('/dashboard') });
+  const orders = useQuery({ queryKey: ['orders'], queryFn: () => api<any[]>('/purchase-orders') });
   const [period, setPeriod] = useState<Period>('month');
   return (
     <div className="space-y-4">
@@ -48,13 +49,13 @@ export function SavingsPage() {
                       <dt className="flex items-center gap-1.5 text-muted">
                         <PiggyBank aria-hidden className="h-3.5 w-3.5" /> Optimiser savings on approved orders
                       </dt>
-                      <dd className="font-mono">{usd(optimiser)}</dd>
+                      <dd className="tabular-nums">{usd(optimiser)}</dd>
                     </div>
                     <div className="flex justify-between gap-3 py-1.5">
                       <dt className="flex items-center gap-1.5 text-muted">
                         <Receipt aria-hidden className="h-3.5 w-3.5" /> Supplier credits recovered
                       </dt>
-                      <dd className="font-mono">{usd(credits)}</dd>
+                      <dd className="tabular-nums">{usd(credits)}</dd>
                     </div>
                   </dl>
                   <p className="mt-2 text-[11px] text-muted">An optimiser saving counts when an order is approved: preferred-supplier baseline (same needs, pack rounding and fees) minus the optimised cost.</p>
@@ -70,7 +71,7 @@ export function SavingsPage() {
                           </Link>
                         ) : null}
                       </dt>
-                      <dd className="font-mono">{usd(pendingOrders?.saving ?? null)}</dd>
+                      <dd className="tabular-nums">{usd(pendingOrders?.saving ?? null)}</dd>
                     </div>
                     <div className="flex justify-between gap-3 py-1.5">
                       <dt className="text-muted">
@@ -79,7 +80,7 @@ export function SavingsPage() {
                           view
                         </Link>
                       </dt>
-                      <dd className="font-mono">{usd(d.summary.pending.creditPending)}</dd>
+                      <dd className="tabular-nums">{usd(d.summary.pending.creditPending)}</dd>
                     </div>
                   </dl>
                   <div className="mt-3 rounded-md border border-line bg-raised p-3 text-sm">
@@ -88,10 +89,10 @@ export function SavingsPage() {
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-6 gap-y-1">
                       <span>
-                        Waste avoided <span className="font-mono">{usd(d.summary.estimates.wasteAvoided)}</span>
+                        Waste avoided <span className="tabular-nums">{usd(d.summary.estimates.wasteAvoided)}</span>
                       </span>
                       <span>
-                        Time saved <span className="font-mono">{usd(d.summary.estimates.timeSaved)}</span>
+                        Time saved <span className="tabular-nums">{usd(d.summary.estimates.timeSaved)}</span>
                       </span>
                     </div>
                     {Object.entries(d.summary.estimates.methods).map(([k, v]) => (
@@ -102,6 +103,7 @@ export function SavingsPage() {
                   </div>
                 </Card>
               </div>
+              <ByOrder orders={(orders.data ?? []).filter((o) => APPROVED.has(o.status) && o.baseline_total !== null && inPeriod({ created_at: o.approved_at ?? o.created_at }))} />
               <Card title="Ledger" icon={CircleDollarSign} subtitle="Every entry with its source and method" pad={false}>
                 {entries.length ? (
                   <Table head={['When', 'Type', 'Amount', 'Status', 'Source', 'Method']} align={['left', 'left', 'right', 'left', 'left', 'left']}>
@@ -135,5 +137,52 @@ export function SavingsPage() {
         }}
       </Q>
     </div>
+  );
+}
+
+const APPROVED = new Set(['approved', 'sent', 'confirmed', 'partially_confirmed', 'received', 'partially_received', 'closed']);
+
+/** Baseline vs planned cost per approved order: the source of every optimiser saving in the ledger. */
+function ByOrder({ orders }: { orders: any[] }) {
+  const baseline = orders.reduce((s, o) => s + o.baseline_total, 0);
+  const planned = orders.reduce((s, o) => s + o.total, 0);
+  const saved = orders.reduce((s, o) => s + (o.saving ?? 0), 0);
+  return (
+    <Card title="Savings by order" icon={Calculator} subtitle="Approved orders in this period" pad={false}>
+      {orders.length ? (
+        <>
+          <Table head={['Order', 'Supplier', 'Baseline', 'Planned', 'Saving', '%']} align={['left', 'left', 'right', 'right', 'right', 'right']}>
+            {orders.map((o) => (
+              <tr key={o.id}>
+                <td className="px-3 py-2">
+                  <Link className="font-medium text-accent hover:underline" to={`/orders/${o.id}`}>
+                    {o.number}
+                  </Link>
+                </td>
+                <td className="px-3 py-2">{o.supplier}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{usd(o.baseline_total)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{usd(o.total)}</td>
+                <td className={cx('px-3 py-2 text-right tabular-nums', o.saving > 0 && 'text-emerald-700')}>{usd(o.saving ?? 0)}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-muted">{o.baseline_total > 0 ? pct(((o.saving ?? 0) / o.baseline_total) * 100) : '—'}</td>
+              </tr>
+            ))}
+            <tr className="bg-raised font-semibold">
+              <td className="px-3 py-2" colSpan={2}>
+                Total
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums">{usd(baseline)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{usd(planned)}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{usd(saved)}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{baseline > 0 ? pct((saved / baseline) * 100) : '—'}</td>
+            </tr>
+          </Table>
+          <p className="border-t border-line px-4 py-2 text-[11px] text-muted">
+            Baseline = the same quantities bought from each ingredient's preferred supplier, with pack rounding, delivery and small-order fees. Planned = the optimised order. Saving = baseline − planned, counted when the order is approved.
+          </p>
+        </>
+      ) : (
+        <p className="p-4 text-sm text-muted">No approved orders in this period.</p>
+      )}
+    </Card>
   );
 }

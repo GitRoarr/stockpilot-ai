@@ -6,7 +6,7 @@ import type { Me } from '../components/Layout';
 import { Thread } from '../components/Thread';
 import { Bot, Check, Clock, Info, ListChecks, MessageSquare, Minus, Pause, Play, ShieldCheck, Sparkles, Timer, Users } from 'lucide-react';
 import { ago, Badge, Button, Card, cx, dt, Empty, inputCls, Kpi, Modal, num, PageHeader, Q, SearchInput, Status, Table, Tabs, usd, type Tone } from '../components/ui';
-import { AgentAvatar } from './Today';
+import { AgentAvatar } from '../components/AgentAvatar';
 
 // Team page (FR-112, FR-120): AI agents (profiles, permissions, status, tasks, runs, scorecards), the people on the
 // team with their roles and workload, and team chat (FR-057).
@@ -275,7 +275,7 @@ function AgentCard({ a, owner, onOpen }: { a: any; owner: boolean; onOpen: () =>
                 <Link to={`/activity/runs/${r.id}`} className="hover:underline">
                   {dt(r.started_at)}
                 </Link>{' '}
-                <Status s={r.status} /> {r.mode === 'deterministic' && <Badge tone="amber">rule-based</Badge>}
+                <Status s={r.status} /> {r.mode === 'deterministic' && <Badge>rules engine</Badge>}
               </li>
             ))}
             {!a.lastRuns.length && <li className="text-muted">None yet</li>}

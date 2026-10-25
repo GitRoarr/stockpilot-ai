@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, post } from '../api/client';
-import { agentName, Badge, Button, Card, Collapse, cx, dt, Empty, ErrorCard, inputCls, Json, PageHeader, Q, Status, Table, Tabs } from '../components/ui';
+import { agentName, Badge, Button, Card, Collapse, cx, dt, Empty, ErrorCard, fallbackText, inputCls, Json, ModeBadge, PageHeader, Q, Status, Table, Tabs } from '../components/ui';
 
 // Agent activity (FR-060), audit timeline (FR-099) and outbox (FR-090).
 const TABS = ['runs', 'audit', 'outbox'] as const;
@@ -46,7 +46,7 @@ function Runs() {
                   <td className="max-w-xs truncate px-3 py-2 text-xs" title={r.goal}>
                     {r.goal}
                   </td>
-                  <td className="px-3 py-2">{r.mode === 'ai' ? <Badge tone="green">{r.model ?? 'AI'}</Badge> : <Badge tone="amber">rule-based ({r.fallback_reason})</Badge>}</td>
+                  <td className="px-3 py-2">{r.mode === 'ai' ? <Badge tone="green">{r.model ?? 'AI'}</Badge> : <Badge tone="gray" title={`Rules engine: ${fallbackText(r.fallback_reason)}`}>rules engine</Badge>}</td>
                   <td className="px-3 py-2 font-mono text-xs">
                     {r.steps_used}/{r.tool_calls_used}
                   </td>
@@ -77,7 +77,7 @@ export function RunDetailPage() {
             subtitle={`${dt(r.startedAt)}${r.endedAt ? ` → ${dt(r.endedAt)}` : ''}`}
             actions={
               <>
-                {r.mode === 'ai' ? <Badge tone="green">AI · {r.model}</Badge> : <Badge tone="amber">rule-based ({r.fallbackReason})</Badge>}
+                {r.mode === 'ai' ? <Badge tone="green">AI · {r.model}</Badge> : <ModeBadge mode="rule_based" reason={r.fallbackReason} />}
                 {r.externalText && <Badge tone="red" title="Triggered by text from outside the restaurant: reduced authority (FR-059)">external text</Badge>}
                 <Status s={r.status} />
                 {['queued', 'running', 'waiting_for_children', 'waiting_for_human'].includes(r.status) && (

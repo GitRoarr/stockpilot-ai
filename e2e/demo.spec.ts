@@ -32,12 +32,12 @@ test('morning run → approve → supplier shortage → replan → receive → i
 
   await page.getByRole('link', { name: 'Today' }).click();
   await expect(page.getByRole('heading', { name: 'Standup' })).toBeVisible();
-  await expect(page.getByText(/rule-based \(no_api_key\)/).first()).toBeVisible();
+  await expect(page.getByText('Rules engine', { exact: true }).first()).toBeVisible();
   await shot(page, '03-today-standup');
 
   // E2E-3: the Golden Gate order in the Inbox — $366.92, saving $18.48 — approve.
   await page.getByRole('link', { name: /^Inbox/ }).first().click();
-  const gg = page.locator('li', { hasText: 'Golden Gate Foodservice' }).filter({ hasText: 'send_purchase_order' }).first();
+  const gg = page.locator('li', { hasText: 'Golden Gate Foodservice' }).filter({ hasText: 'Send purchase order' }).first();
   await expect(gg).toContainText('$366.92');
   await expect(gg).toContainText('saves $18.48');
   await shot(page, '04-inbox');
@@ -73,7 +73,7 @@ test('morning run → approve → supplier shortage → replan → receive → i
 
   // Buyer replans the shortfall: Bay Meat Supply, $49.00, waiting for approval.
   await page.getByRole('link', { name: /^Inbox/ }).first().click();
-  const bay = page.locator('li', { hasText: 'Bay Meat Supply' }).filter({ hasText: 'send_purchase_order' }).first();
+  const bay = page.locator('li', { hasText: 'Bay Meat Supply' }).filter({ hasText: 'Send purchase order' }).first();
   await expect(bay).toContainText('$49.00', { timeout: 20_000 });
   await shot(page, '07-replan-proposal');
 
@@ -202,7 +202,7 @@ test('data entry forms: dish, sales, supplier, offer and reorder level are saved
   await page.locator('tr', { hasText: 'Salmon fillet' }).getByRole('button', { name: 'Edit' }).click();
   await page.getByLabel(/Reorder level/).fill('40');
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.locator('tr', { hasText: 'Salmon fillet' })).toContainText('reorder level 40');
+  await expect(page.locator('tr', { hasText: 'Salmon fillet' }).getByRole('cell', { name: '40 lb', exact: true })).toBeVisible();
 
   // The forecast now includes the new dish.
   await page.goto('/forecast');
@@ -298,5 +298,16 @@ test('settings: time travel and workspace data reset, with confirmation', async 
   await page.getByRole('dialog').getByRole('button', { name: 'Delete and reset' }).click();
   await expect(page.getByText('Data reset complete. Sign in again to continue.')).toBeVisible({ timeout: 150_000 });
   await login(page, 'sara@harborvine.com');
-  await expect(page.getByText('No morning run yet')).toBeVisible();
+  await expect(page.getByText('No morning plan yet today')).toBeVisible();
+});
+
+test('login: empty email by default; one-click sample accounts sign in directly', async ({ page }) => {
+  await page.goto('/login');
+  await expect(page.getByLabel('Email')).toHaveValue('');
+  await page.getByRole('button', { name: /Continue as Staff/ }).click();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Leo/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Account menu' }).click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await page.getByRole('button', { name: /Continue as Owner/ }).click();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Sara/ })).toBeVisible();
 });

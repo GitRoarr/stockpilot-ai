@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
-// Light / dark / system theme. The preference is stored per browser; index.html applies it before first paint.
+// Light (default) / dark / system theme. The preference is stored per browser; index.html applies it before first paint.
 export type ThemePref = 'light' | 'dark' | 'system';
 const KEY = 'sp-theme';
 const media = () => window.matchMedia('(prefers-color-scheme: dark)');
@@ -9,9 +9,9 @@ const listeners = new Set<() => void>();
 export function getPref(): ThemePref {
   try {
     const v = localStorage.getItem(KEY);
-    return v === 'light' || v === 'dark' ? v : 'system';
+    return v === 'dark' || v === 'system' ? v : 'light';
   } catch {
-    return 'system';
+    return 'light';
   }
 }
 
@@ -28,8 +28,7 @@ function apply() {
 
 export function setPref(p: ThemePref) {
   try {
-    if (p === 'system') localStorage.removeItem(KEY);
-    else localStorage.setItem(KEY, p);
+    localStorage.setItem(KEY, p);
   } catch {
     /* storage unavailable: the choice still applies for this page view */
   }

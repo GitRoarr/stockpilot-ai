@@ -6,7 +6,7 @@ import { api, patch, post } from '../api/client';
 import type { Me } from '../components/Layout';
 import { Thread } from '../components/Thread';
 import { useToast } from '../components/toast';
-import { Badge, Button, Card, ConfirmDialog, cx, dt, Empty, ErrorCard, inputCls, Modal, num, PageHeader, Q, SearchInput, Status, Table, Tabs, usd } from '../components/ui';
+import { Badge, Button, Card, ConfirmDialog, cx, dt, Empty, ErrorCard, inputCls, Modal, num, PageHeader, Q, SearchInput, Status, Table, Tabs, usd, usePaged, useSorted } from '../components/ui';
 
 const FILTERS = [
   ['open', 'Open'],
@@ -48,43 +48,82 @@ export function OrdersPage() {
                   </Empty>
                 </div>
               );
-            return (
-              <Table head={['Order', 'Supplier', 'Items', 'Total', 'Saving', 'Delivery', 'Status', '']} align={['left', 'left', 'right', 'right', 'right', 'left', 'left', 'right']}>
-                {list.map((r) => (
-                  <tr key={r.id}>
-                    <td className="whitespace-nowrap px-3 py-2">
-                      <Link className="font-mono font-medium text-accent hover:underline" to={`/orders/${r.id}`}>
-                        {r.number}
-                      </Link>
-                      {r.parent_po_id && (
-                        <span className="ml-1.5">
-                          <Badge tone="violet">follow-up</Badge>
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">{r.supplier}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{r.lineCount}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{usd(r.total)}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums text-emerald-700">{r.saving > 0 ? usd(r.saving) : '—'}</td>
-                    <td className="whitespace-nowrap px-3 py-2">{r.delivery_date ?? '—'}</td>
-                    <td className="px-3 py-2">
-                      <Status s={r.status} />
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <Link aria-label={`Open ${r.number}`} className="inline-grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-raised hover:text-ink" to={`/orders/${r.id}`}>
-                        <ChevronRight aria-hidden className="h-4 w-4" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </Table>
-            );
+            return <OrderTable rows={list} />;
           }}
         </Q>
       </Card>
     </div>
   );
 }
+
+const RECEIVABLE = new Set(['sent', 'confirmed', 'partially_confirmed', 'partially_received']);
+
+function OrderTable({ rows }: { rows: any[] }) {
+  const sorted = useSorted(rows, { number: (r) => r.number, supplier: (r) => r.supplier, total: (r) => r.total, delivery: (r) => r.delivery_date, status: (r) => r.status }, { key: 'number', dir: 'desc' });
+  const paged = usePaged(sorted.rows, 15);
+  return (
+    <>
+      <Table
+        head={[sorted.header('number', 'Order'), sorted.header('supplier', 'Supplier'), 'Items', sorted.header('total', 'Total'), 'Saving', sorted.header('delivery', 'Delivery'), sorted.header('status', 'Status'), <span className="sr-only">Actions</span>]}
+        align={['left', 'left', 'right', 'right', 'right', 'left', 'left', 'right']}
+      >
+        {paged.rows.map((r) => (
+          <tr key={r.id}>
+            <td className="whitespace-nowrap px-3 py-2">
+              <Link className="font-mono text-[13px] font-medium text-accent hover:underline" to={`/orders/${r.id}`}>
+                {r.number}
+              </Link>
+              {r.parent_po_id && (
+                <span className="ml-1.5">
+                  <Badge tone="violet">follow-up</Badge>
+                </span>
+              )}
+            </td>
+            <td className="px-3 py-2">
+              <span className="flex items-center gap-2.5">
+                <span aria-hidden className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-raised text-[11px] font-semibold text-muted ring-1 ring-line">
+                  {initials(r.supplier)}
+                </span>
+                <span className="min-w-0 truncate">{r.supplier}</span>
+              </span>
+            </td>
+            <td className="px-3 py-2 text-right tabular-nums">{r.lineCount}</td>
+            <td className="px-3 py-2 text-right tabular-nums">{usd(r.total)}</td>
+            <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{r.saving > 0 ? usd(r.saving) : <span className="text-muted">—</span>}</td>
+            <td className="whitespace-nowrap px-3 py-2">{r.delivery_date ?? '—'}</td>
+            <td className="px-3 py-2">
+              <Status s={r.status} />
+            </td>
+            <td className="whitespace-nowrap px-3 py-2 text-right">
+              {r.status === 'pending_approval' || r.status === 'draft' ? (
+                <Link className="text-xs font-medium text-accent hover:underline" to={`/orders/${r.id}`}>
+                  Review
+                </Link>
+              ) : RECEIVABLE.has(r.status) ? (
+                <Link className="text-xs font-medium text-accent hover:underline" to={`/receiving/po/${r.id}`}>
+                  Receive
+                </Link>
+              ) : (
+                <Link aria-label={`Open ${r.number}`} className="inline-grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-raised hover:text-ink" to={`/orders/${r.id}`}>
+                  <ChevronRight aria-hidden className="h-4 w-4" />
+                </Link>
+              )}
+            </td>
+          </tr>
+        ))}
+      </Table>
+      {paged.pager}
+    </>
+  );
+}
+
+const initials = (name: string) =>
+  name
+    .split(/[\s&]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
 
 const linkBtn = 'inline-flex h-8 items-center gap-1.5 rounded-md border border-line-strong bg-card px-3 text-sm font-medium shadow-card hover:bg-raised';
 

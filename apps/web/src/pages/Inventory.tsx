@@ -5,7 +5,8 @@ import { api, patch, post } from '../api/client';
 import type { Me } from '../components/Layout';
 import { Thread } from '../components/Thread';
 import { CsvImportModal } from '../components/CsvImport';
-import { Badge, Button, Card, cx, ErrorCard, Field, inputCls, Modal, num, PageHeader, Q, Status, Table, Tabs, usd } from '../components/ui';
+import { Boxes, Download, Plus, Upload } from 'lucide-react';
+import { Badge, Button, Card, cx, Empty, ErrorCard, Field, inputCls, Modal, num, PageHeader, Q, SearchInput, Status, Table, Tabs, usd, useSorted } from '../components/ui';
 
 // Inventory, sales, suppliers & offers, menu (FR-003 – FR-008, FR-030 – FR-036). Every need has a one-click "Why?".
 // Everything entered here is used live by the forecast, reorder, optimiser, purchase orders and reconciliation.
@@ -40,70 +41,101 @@ function Ingredients({ me }: { me: Me }) {
       title="Ingredients"
       actions={
         <>
-          <input aria-label="Search" className={cx(inputCls.replace('w-full ', ''), 'w-44')} placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <select aria-label="Status filter" className={cx(inputCls.replace('w-full ', ''), 'w-28')} value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">All</option>
+          <SearchInput className="w-full sm:w-56" value={search} onChange={setSearch} placeholder="Search ingredients…" label="Search ingredients" />
+          <select aria-label="Status filter" className={cx(inputCls.replace('w-full ', ''), 'w-32')} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All statuses</option>
             <option value="critical">Critical</option>
             <option value="low">Low</option>
             <option value="ok">OK</option>
           </select>
-          <a className="inline-flex items-center rounded-full border border-line-strong px-4 py-1.5 text-sm font-medium transition hover:bg-raised" href="/api/inventory/export.csv">
-            Export CSV
+          <a className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line-strong bg-card px-3 text-sm font-medium shadow-card hover:bg-raised" href="/api/inventory/export.csv">
+            <Download aria-hidden className="h-3.5 w-3.5" /> Export CSV
           </a>
-          {me.user.role !== 'staff' && <Button onClick={() => setImporting(true)}>Import CSV</Button>}
-          {me.user.role !== 'staff' && <Button onClick={() => setEdit({})}>New</Button>}
+          {me.user.role !== 'staff' && (
+            <Button icon={Upload} onClick={() => setImporting(true)}>
+              Import CSV
+            </Button>
+          )}
+          {me.user.role !== 'staff' && (
+            <Button variant="primary" icon={Plus} onClick={() => setEdit({})}>
+              New ingredient
+            </Button>
+          )}
           {importing && <CsvImportModal kind="inventory" onClose={() => setImporting(false)} />}
         </>
       }
     >
       <Q q={q}>
-        {(rows) => (
-          <Table head={['Ingredient', 'Category', 'On hand', 'Usable', 'Cover', 'Need', 'At risk', 'Status', '']}>
-            {rows
-              .filter((r) => (!search || r.name.toLowerCase().includes(search.toLowerCase())) && (!status || r.status === status))
-              .map((r) => (
-                <tr key={r.id}>
-                  <td className="px-3 py-2">
-                    <div className="font-medium">{r.name}</div>
-                    <div className="text-[11px] text-muted">
-                      {r.perishable ? `${r.shelfLifeDays}-day shelf life` : 'non-perishable'} · service level {Math.round(r.serviceLevel * 100)}%{r.reorderLevel ? ` · reorder level ${num(r.reorderLevel)} ${r.unit}` : ''}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-xs">{r.category}</td>
-                  <td className="px-3 py-2 font-mono">
-                    {num(r.onHand)} {r.unit}
-                  </td>
-                  <td className="px-3 py-2 font-mono">{num(r.usable)}</td>
-                  <td className="px-3 py-2 font-mono">{r.daysOfCover === null ? '—' : `${num(r.daysOfCover)} d`}</td>
-                  <td className="px-3 py-2 font-mono">
-                    {r.need > 0 ? num(r.need) : '—'} {r.trace?.flags.includes('capped_by_shelf_life') && <Badge tone="violet">shelf cap</Badge>}
-                  </td>
-                  <td className="px-3 py-2 font-mono text-xs">{r.valueAtRisk > 0 ? usd(r.valueAtRisk) : r.expiredQty > 0 ? <Badge tone="red">expired {num(r.expiredQty)}</Badge> : '—'}</td>
-                  <td className="px-3 py-2">
-                    <Status s={r.status} />
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right">
-                    <Button variant="ghost" onClick={() => setWhy(r)}>
-                      Why?
-                    </Button>
-                    <Button variant="ghost" onClick={() => setMove(r)}>
-                      Stock
-                    </Button>
-                    {me.user.role !== 'staff' && (
-                      <Button variant="ghost" onClick={() => setEdit(r)}>
-                        Edit
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-          </Table>
-        )}
+        {(rows) => <IngredientTable rows={rows.filter((r) => (!search || r.name.toLowerCase().includes(search.toLowerCase())) && (!status || r.status === status))} me={me} onWhy={setWhy} onMove={setMove} onEdit={setEdit} />}
       </Q>
       {why && <WhyModal r={why} onClose={() => setWhy(null)} />}
       {move && <MoveModal r={move} onClose={() => setMove(null)} />}
       {edit && <EditIngredient r={edit} onClose={() => setEdit(null)} />}
     </Card>
+  );
+}
+
+const STATUS_RANK: Record<string, number> = { critical: 0, low: 1, ok: 2 };
+const nextExpiry = (r: any) => (r.expiry ?? []).map((e: any) => e.expiresAt).filter(Boolean).sort()[0] as string | undefined;
+
+function IngredientTable({ rows, me, onWhy, onMove, onEdit }: { rows: any[]; me: Me; onWhy: (r: any) => void; onMove: (r: any) => void; onEdit: (r: any) => void }) {
+  const sorted = useSorted(rows, { name: (r) => r.name.toLowerCase(), onHand: (r) => r.onHand, cover: (r) => r.daysOfCover, expiry: (r) => nextExpiry(r) ?? null, status: (r) => STATUS_RANK[r.status] ?? 3 }, { key: 'status', dir: 'asc' });
+  if (!rows.length) return <div className="p-4"><Empty icon={Boxes}>No ingredients match these filters.</Empty></div>;
+  return (
+    <Table
+      head={[sorted.header('name', 'Ingredient'), sorted.header('onHand', 'On hand'), 'Reorder at', sorted.header('cover', 'Days of cover'), sorted.header('expiry', 'Next expiry'), 'To order', sorted.header('status', 'Status'), <span className="sr-only">Actions</span>]}
+      align={['left', 'right', 'right', 'right', 'left', 'right', 'left', 'right']}
+    >
+      {sorted.rows.map((r) => {
+        const exp = nextExpiry(r);
+        return (
+          <tr key={r.id}>
+            <td className="px-3 py-2">
+              <div className="font-medium">{r.name}</div>
+              <div className="text-[11px] text-muted">
+                {r.category} · {r.perishable ? `${r.shelfLifeDays}-day shelf life` : 'non-perishable'}
+              </div>
+            </td>
+            <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
+              {num(r.onHand)} <span className="text-muted">{r.unit}</span>
+            </td>
+            <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{r.reorderLevel ? `${num(r.reorderLevel)} ${r.unit}` : <span className="text-muted">auto</span>}</td>
+            <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{r.daysOfCover === null ? '—' : `${num(r.daysOfCover)} d`}</td>
+            <td className="whitespace-nowrap px-3 py-2 text-xs">
+              {r.expiredQty > 0 ? (
+                <Badge tone="red">expired {num(r.expiredQty)}</Badge>
+              ) : exp ? (
+                <>
+                  {exp}
+                  {r.valueAtRisk > 0 && <span className="block text-amber-700">{usd(r.valueAtRisk)} at risk</span>}
+                </>
+              ) : (
+                <span className="text-muted">—</span>
+              )}
+            </td>
+            <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
+              {r.need > 0 ? `${num(r.need)} ${r.unit}` : '—'} {r.trace?.flags.includes('capped_by_shelf_life') && <Badge tone="violet">shelf cap</Badge>}
+            </td>
+            <td className="px-3 py-2">
+              <Status s={r.status} />
+            </td>
+            <td className="whitespace-nowrap px-3 py-2 text-right">
+              <Button size="sm" variant="subtle" onClick={() => onWhy(r)}>
+                Why?
+              </Button>
+              <Button size="sm" variant="subtle" onClick={() => onMove(r)}>
+                Stock
+              </Button>
+              {me.user.role !== 'staff' && (
+                <Button size="sm" variant="subtle" onClick={() => onEdit(r)}>
+                  Edit
+                </Button>
+              )}
+            </td>
+          </tr>
+        );
+      })}
+    </Table>
   );
 }
 
@@ -695,7 +727,7 @@ function SalesSheet({ me, today }: { me: Me; today: string }) {
       <Card title="Last 14 days" subtitle="Portions per dish (seeded or entered)" className="lg:col-span-3" pad={false}>
         <Q q={recent}>
           {(rows) => (
-            <div className="overflow-x-auto">
+            <div className="relative overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-line text-left text-muted">

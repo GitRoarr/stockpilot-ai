@@ -3,12 +3,45 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, patch, post } from '../api/client';
 import { Thread } from '../components/Thread';
-import { ListChecks, Plus } from 'lucide-react';
+import { CalendarDays, ListChecks, Plus, User } from 'lucide-react';
+import { AgentAvatar } from '../components/AgentAvatar';
 import { useToast } from '../components/toast';
 import { agentName, Badge, Button, Card, cx, dt, Empty, ErrorCard, Field, inputCls, Json, Modal, PageHeader, Q, SearchInput, Status, Table, Tabs } from '../components/ui';
 
 // Shared task board (FR-113 – FR-115): humans and agents; assigning to an agent starts a run.
 const COLS = ['todo', 'in_progress', 'waiting', 'blocked', 'done'] as const;
+const COL_LABEL: Record<(typeof COLS)[number], string> = { todo: 'To do', in_progress: 'In progress', waiting: 'Waiting', blocked: 'Blocked', done: 'Done' };
+const LINKED: Record<string, string> = { purchase_order: 'order', invoice: 'invoice', dispute: 'dispute' };
+
+function TaskCard({ t }: { t: any }) {
+  return (
+    <Link to={`/tasks/${t.id}`} className="block rounded-xl border border-line bg-card p-3.5 shadow-card transition-colors hover:border-line-strong">
+      {(t.parent_id || LINKED[t.linked_type]) && (
+        <div className="mb-2 flex flex-wrap gap-1">
+          {t.parent_id && <Badge tone="violet">delegated</Badge>}
+          {LINKED[t.linked_type] && <Badge tone="blue">{LINKED[t.linked_type]}</Badge>}
+        </div>
+      )}
+      <div className="line-clamp-2 text-sm font-semibold leading-snug">{t.title}</div>
+      {t.description && <p className="mt-1 line-clamp-2 text-xs text-muted">{t.description}</p>}
+      <div className="mt-3 flex items-center gap-2 text-xs text-muted">
+        <span className="flex items-center gap-1">
+          <CalendarDays aria-hidden className="h-3.5 w-3.5" />
+          {t.due_at ? `Due ${dt(t.due_at)}` : dt(t.updated_at)}
+        </span>
+        <span className="ml-auto" title={t.assignee_type === 'agent' ? agentName(t.assignee_id) : t.assignee_type === 'user' ? 'Person' : 'Unassigned'}>
+          {t.assignee_type === 'agent' ? (
+            <AgentAvatar id={t.assignee_id} />
+          ) : (
+            <span className="grid h-6 w-6 place-items-center rounded-full bg-raised text-muted ring-1 ring-line">
+              <User aria-hidden className="h-3.5 w-3.5" />
+            </span>
+          )}
+        </span>
+      </div>
+    </Link>
+  );
+}
 
 function assignee(t: any) {
   if (t.assignee_type === 'agent') return <Badge tone="blue">{agentName(t.assignee_id)}</Badge>;
@@ -62,7 +95,7 @@ export function TasksPage() {
           ))}
         </select>
         <label className="flex items-center gap-1.5 text-sm text-muted">
-          <input type="checkbox" className="accent-[var(--primary)]" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> Show done
+          <input type="checkbox" className="accent-[var(--foreground)]" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> Show done
         </label>
         <SearchInput className="ml-auto w-full sm:w-56" value={search} onChange={setSearch} placeholder="Search tasks…" label="Search tasks" />
       </div>
@@ -107,28 +140,22 @@ export function TasksPage() {
               </Card>
             );
           return (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="-mx-1 grid auto-cols-[minmax(272px,1fr)] grid-flow-col items-start gap-4 overflow-x-auto px-1 pb-2">
               {COLS.filter((c) => showDone || c !== 'done').map((c) => {
                 const col = tasks.filter((t) => t.status === c);
                 return (
-                  <section key={c} aria-label={c.replace('_', ' ')} className="min-w-0 rounded-lg border border-line bg-raised p-2">
-                    <div className="mb-2 flex items-center gap-2 px-1 text-xs font-medium capitalize text-muted">
-                      <Status s={c} /> <span className="ml-auto tabular-nums">{col.length}</span>
-                    </div>
-                    <ul className="space-y-1.5">
+                  <section key={c} aria-label={c.replace('_', ' ')} className="flex min-w-0 flex-col rounded-2xl bg-raised p-3">
+                    <h2 className="mb-3 flex items-center gap-2 px-1 text-sm font-semibold">
+                      {COL_LABEL[c]}
+                      <span className="ml-auto grid h-6 min-w-6 place-items-center rounded-full bg-card px-1.5 text-xs font-semibold tabular-nums text-muted ring-1 ring-line">{col.length}</span>
+                    </h2>
+                    <ul className="space-y-2.5">
                       {col.slice(0, 40).map((t) => (
                         <li key={t.id}>
-                          <Link to={`/tasks/${t.id}`} className="block rounded-md border border-line bg-card p-2.5 text-sm shadow-card transition-colors hover:border-line-strong">
-                            <div className="line-clamp-2 font-medium">{t.title}</div>
-                            <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-muted">
-                              {assignee(t)}
-                              {t.parent_id && <Badge tone="violet">delegated</Badge>}
-                              <span className="ml-auto">{t.due_at ? `due ${dt(t.due_at)}` : dt(t.updated_at)}</span>
-                            </div>
-                          </Link>
+                          <TaskCard t={t} />
                         </li>
                       ))}
-                      {!col.length && <li className="px-1 py-2 text-xs text-muted">No tasks</li>}
+                      {!col.length && <li className="rounded-xl border border-dashed border-line-strong px-3 py-6 text-center text-xs text-muted">No tasks</li>}
                     </ul>
                   </section>
                 );
@@ -257,7 +284,7 @@ export function TaskDetailPage() {
                     <Link className="hover:underline" to={`/activity/runs/${r.id}`}>
                       {agentName(r.agent_id)} · {dt(r.started_at)}
                     </Link>{' '}
-                    <Status s={r.status} /> {r.mode === 'deterministic' && <Badge tone="amber">rule-based</Badge>}
+                    <Status s={r.status} /> {r.mode === 'deterministic' && <Badge>rules engine</Badge>}
                   </li>
                 ))}
                 {!t.runs.length && <li className="text-muted">None</li>}

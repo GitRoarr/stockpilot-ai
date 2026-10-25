@@ -80,7 +80,7 @@ Data you enter in **Inventory** (suppliers, offers, dishes, sales, stock) or imp
 |---|---|
 | `npm test` | 135 unit, property and API tests, including every SRS acceptance criterion |
 | `npm run eval` | 20 agent scenarios on recorded model responses (`-- --live` runs them against Gemini) |
-| `npm run e2e` | 7 Playwright browser tests in Chrome |
+| `npm run e2e` | 8 Playwright browser tests in Chrome |
 | `npm run typecheck` / `npm run build` | Strict TypeScript and production build |
 
 CI runs all of them on every push ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)). Gemini, Brevo, Open-Meteo and Nager.Date have also been verified live.
