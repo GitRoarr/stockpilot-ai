@@ -32,7 +32,7 @@ npm run dev      # web http://localhost:5173 · API http://127.0.0.1:8787
 | Chef | `daniel@harborvine.com` | `harborvine2026` |
 | Staff | `leo@harborvine.com` | `harborvine2026` |
 
-Owner can do everything; Chef plans, approves up to $1,500 and handles disputes; Staff receives deliveries and uploads invoices.
+Owner can do everything; Chef plans, approves up to $1,500 and handles disputes; Staff receives deliveries and uploads invoices. In demo mode, **Get started** on the homepage also lets a visitor create their own account; new accounts are always Staff.
 
 ## Configuration
 
@@ -49,6 +49,31 @@ All variables are in [`.env.example`](.env.example). Secrets live only in `.env`
 | `HOST`, `PORT`, `DATABASE_PATH`, `SEED_IF_EMPTY` | Server address, SQLite file, seeding on first start |
 
 Weather (Open-Meteo) and holidays (Nager.Date) need no keys. Check all integrations with `npm run smoke` or **Settings → Integrations**.
+
+## Run with Docker
+
+Requires Docker with Compose v2. The images contain no secrets; configuration is read from `.env` at start-up.
+
+```bash
+cp .env.example .env
+sed -i "s/^SESSION_SECRET=.*/SESSION_SECRET=$(openssl rand -hex 32)/" .env   # plus optional Gemini / Brevo keys
+docker compose up --build      # start → http://localhost:8080
+docker compose logs -f         # follow logs
+docker compose down            # stop (keeps the database; `down -v` deletes it)
+```
+
+| Service | URL | What |
+|---|---|---|
+| `frontend` | http://localhost:8080 | nginx serving the built app; forwards `/api` (incl. live updates) and the supplier portal `/s/` to the backend |
+| `backend` | http://127.0.0.1:8787 | Fastify API (published on this machine only), health at `/api/health` |
+
+- **Database:** SQLite in the `db-data` volume; invoice photos in `uploads`. On first start the schema is created and the restaurant data is loaded (`SEED_IF_EMPTY`). Reload it with `docker compose exec backend npm run seed`, or start over with `docker compose down -v`.
+- **Migrations:** run automatically when the API starts (`schema.sql` is idempotent; later columns are added in `backend/src/db/sqlite.ts`). Restart the backend after pulling changes: `docker compose up --build -d backend`.
+- **Hot reload:** `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build` → http://localhost:5173 (Vite reloads the browser; `tsx watch` restarts the API).
+- **Ports in use** (e.g. `npm run dev` is running): set `DOCKER_WEB_PORT`, `DOCKER_API_PORT` or `DOCKER_DEV_WEB_PORT` in `.env`.
+- **Troubleshooting:** `SESSION_SECRET` missing → Compose stops with a clear message; `frontend` waits until `backend` is healthy (`docker compose ps`); AI steps labelled *rules engine* mean Gemini was unavailable (no key, quota or timeout) — check **Settings → Integrations**.
+
+Docker is for local use only; Render does not use these files.
 
 ## Deploy to Render (free)
 
@@ -78,7 +103,7 @@ Data you enter in **Inventory** (suppliers, offers, dishes, sales, stock) or imp
 
 | Command | What |
 |---|---|
-| `npm test` | 135 unit, property and API tests, including every SRS acceptance criterion |
+| `npm test` | 139 unit, property and API tests, including every SRS acceptance criterion |
 | `npm run eval` | 20 agent scenarios on recorded model responses (`-- --live` runs them against Gemini) |
 | `npm run e2e` | 8 Playwright browser tests in Chrome |
 | `npm run typecheck` / `npm run build` | Strict TypeScript and production build |
@@ -88,9 +113,10 @@ CI runs all of them on every push ([`.github/workflows/ci.yml`](.github/workflow
 ## Project structure
 
 ```
-apps/api     Fastify + TypeScript: engines, agent runtime and policy, services, integrations, jobs, REST + SSE
-apps/web     React 19, Vite, Tailwind 4, TanStack Query
+backend/     Fastify + TypeScript: engines, agent runtime and policy, services, integrations, jobs, REST + SSE (Dockerfile)
+frontend/    React 19, Vite, Tailwind 4, TanStack Query (Dockerfile, nginx config)
 packages/    shared types
+docker-compose.yml, docker-compose.dev.yml   local Docker stack
 templates/   the "Restaurant Purchasing Team": agent manifests, policy, schedule
 evals/       agent eval scenarios and runner
 e2e/         browser tests
