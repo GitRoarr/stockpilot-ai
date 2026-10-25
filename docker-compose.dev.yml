@@ -1,0 +1,35 @@
+# Hot-reload development on top of docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build    → http://localhost:5173
+#
+# The Vite dev server reloads the browser on frontend changes; `tsx watch` restarts the API on backend changes.
+services:
+  backend:
+    build:
+      target: dev
+    environment:
+      NODE_ENV: development
+      APP_BASE_URL: ${DOCKER_DEV_APP_BASE_URL:-http://localhost:5173}
+    volumes:
+      - ./backend/src:/app/backend/src
+      - ./packages/shared/src:/app/packages/shared/src
+      - ./templates:/app/templates
+
+  frontend:
+    build:
+      target: dev
+    environment:
+      API_PROXY_TARGET: http://backend:8787
+    ports: !override
+      - "${DOCKER_DEV_WEB_PORT:-5173}:5173"
+    volumes:
+      - ./frontend/src:/app/frontend/src
+      - ./frontend/public:/app/frontend/public
+      - ./frontend/index.html:/app/frontend/index.html
+      - ./packages/shared/src:/app/packages/shared/src
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173/').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5

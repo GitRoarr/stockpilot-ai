@@ -1,0 +1,61 @@
+# Local StockPilot AI stack (production-like builds). Not used by Render: production is configured in the Render
+# dashboard (see README → Deploy to Render).
+#
+#   docker compose up --build    start → http://localhost:8080
+#   docker compose down          stop (the database volume is kept; add -v to delete it)
+#   docker compose logs -f       follow logs
+#
+# Secrets and options come from .env (copy .env.example). The settings below override only what must differ inside
+# containers: network address, database location and the public URL used in links.
+name: stockpilot
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: runtime
+    init: true
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env (openssl rand -hex 32)}
+      HOST: 0.0.0.0
+      PORT: 8787
+      DATABASE_PATH: /data/stockpilot.db
+      SEED_IF_EMPTY: ${SEED_IF_EMPTY:-true}
+      APP_BASE_URL: ${DOCKER_APP_BASE_URL:-http://localhost:8080}
+    volumes:
+      - db-data:/data
+      - uploads:/app/data/uploads
+    # Direct API access from this machine only (handy for curl and `npm run smoke`); the app itself uses :8080.
+    ports:
+      - "127.0.0.1:${DOCKER_API_PORT:-8787}:8787"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: runtime
+    environment:
+      API_UPSTREAM: http://backend:8787
+    ports:
+      - "${DOCKER_WEB_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  # SQLite database (schema is created and the restaurant data seeded on first start).
+  db-data:
+  # Uploaded invoice photos.
+  uploads:
