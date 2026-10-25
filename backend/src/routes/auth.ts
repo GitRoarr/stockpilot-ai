@@ -1,13 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db } from '../db/sqlite.js';
-import { verifyPassword } from '../auth/password.js';
+import { config } from '../config.js';
+import { hashPassword, verifyPassword } from '../auth/password.js';
 import { checkLoginRate, clearLoginAttempts, createSession, destroySession, readSessionToken, recordFailedLogin, requireUser, setSessionCookie, SESSION_COOKIE, userForToken } from '../auth/sessions.js';
 import { audit } from '../lib/events.js';
-import { AppError } from '../lib/util.js';
+import { AppError, id, nowIso } from '../lib/util.js';
 import { getSettings } from '../lib/settings.js';
 
-const PUBLIC = [/^\/api\/health$/, /^\/api\/auth\/login$/, /^\/api\/portal\//];
+const PUBLIC = [/^\/api\/health$/, /^\/api\/auth\/(login|register)$/, /^\/api\/portal\//];
 
 /** Session + RBAC + CSRF hook (FR-002, NFR-SEC-3). Every /api route except auth, health and portal needs a session. */
 export async function authHook(app: FastifyInstance): Promise<void> {
@@ -36,6 +37,23 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     setSessionCookie(reply, s.token, s.expiresAt);
     audit({ type: 'user', id: u.id }, 'auth.login', 'user', u.id);
     return { user: { id: u.id, name: u.name, email: u.email, role: u.role } };
+  });
+
+  // Self-service sign-up, demo mode only. New accounts get the Staff role (receiving, stock counts, invoices), so a
+  // self-registered user can never approve orders or change the autonomy policy; roles are not chosen at sign-up.
+  app.post('/auth/register', async (req, reply) => {
+    if (!config.DEMO_MODE) throw new AppError(403, 'SIGNUP_DISABLED', 'New accounts are created by the restaurant Owner.');
+    const body = z.object({ name: z.string().trim().min(2).max(80), email: z.string().trim().email().max(120), password: z.string().min(8).max(200) }).parse(req.body);
+    const key = `${req.ip}|register`;
+    checkLoginRate(key);
+    recordFailedLogin(key);
+    if (db().get(`SELECT 1 FROM users WHERE email = ?`, body.email)) throw new AppError(409, 'EMAIL_TAKEN', 'An account with this email already exists. Sign in instead.');
+    const u = { id: id('usr'), name: body.name, email: body.email.toLowerCase(), role: 'staff' as const };
+    db().run(`INSERT INTO users (id, name, email, role, password_hash, created_at) VALUES (?,?,?,?,?,?)`, u.id, u.name, u.email, u.role, await hashPassword(body.password), nowIso());
+    const s = createSession(u.id);
+    setSessionCookie(reply, s.token, s.expiresAt);
+    audit({ type: 'user', id: u.id }, 'auth.register', 'user', u.id, { after: { role: u.role } });
+    return { user: u };
   });
 
   app.post('/auth/logout', async (req, reply) => {
