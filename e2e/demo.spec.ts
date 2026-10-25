@@ -10,9 +10,9 @@ const shot = async (page: Page, name: string) => {
 
 async function login(page: Page, email: string) {
   await page.goto('/login');
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password', { exact: true }).fill('harborvine2026');
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening)/ })).toBeVisible();
 }
 
@@ -101,7 +101,11 @@ test('morning run → approve → supplier shortage → replan → receive → i
   await expect(page.getByText('$42.10').first()).toBeVisible();
   await shot(page, '10-three-way-match');
 
-  // AP Clerk drafted the dispute.
+  // Staff can't open Disputes (Owner/Chef only); the Chef sees the dispute AP Clerk drafted.
+  await page.goto('/disputes');
+  await expect(page.getByText('Not available for your role')).toBeVisible();
+  await page.context().clearCookies();
+  await login(page, 'daniel@harborvine.com');
   await page.goto('/disputes');
   await expect(page.locator('tr', { hasText: 'Golden Gate Foodservice' })).toContainText('$42.10', { timeout: 20_000 });
   await shot(page, '11-disputes');
@@ -303,11 +307,14 @@ test('settings: time travel and workspace data reset, with confirmation', async 
 
 test('login: empty email by default; one-click sample accounts sign in directly', async ({ page }) => {
   await page.goto('/login');
-  await expect(page.getByLabel('Email')).toHaveValue('');
-  await page.getByRole('button', { name: /Continue as Staff/ }).click();
+  await expect(page.getByLabel('Email', { exact: true })).toHaveValue('');
+  await expect(page.getByRole('dialog').getByRole('button', { name: /Continue as/ })).toHaveCount(0);
+  await page.getByRole('dialog').getByRole('button', { name: 'Use demo data' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /Continue as Staff/ }).click();
   await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Leo/ })).toBeVisible();
   await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
-  await page.getByRole('button', { name: /Continue as Owner/ }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Use demo data' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /Continue as Owner/ }).click();
   await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Sara/ })).toBeVisible();
 });

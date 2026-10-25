@@ -19,6 +19,8 @@ const TABS = [
   ['completed', 'Completed'],
 ] as const;
 type Tab = (typeof TABS)[number][0];
+// Staff don't approve or answer for the team (SRS roles), so they see information only.
+const STAFF_TABS = TABS.filter(([t]) => t === 'notifications' || t === 'suppliers');
 // Actions that contact a supplier get an explicit confirmation step.
 const SENDS = new Set(['send_purchase_order', 'send_dispute_email', 'send_supplier_followup']);
 
@@ -34,7 +36,8 @@ const toolLabel = (t: string) => TOOL_LABEL[t] ?? t.charAt(0).toUpperCase() + t.
 export function InboxPage({ me }: { me: Me }) {
   const q = useQuery({ queryKey: ['inbox'], queryFn: () => api<any>('/inbox') });
   const notes = useQuery({ queryKey: ['notifications'], queryFn: () => api<any[]>('/notifications') });
-  const [tab, setTab] = useState<Tab>('pending');
+  const staff = me.user.role === 'staff';
+  const [tab, setTab] = useState<Tab>(staff ? 'notifications' : 'pending');
   const [search, setSearch] = useState('');
   const [expandAll, setExpandAll] = useState(false);
   const d = q.data;
@@ -49,10 +52,10 @@ export function InboxPage({ me }: { me: Me }) {
   };
   return (
     <div className="space-y-5">
-      <PageHeader title="Inbox" description="Decisions your AI team needs from you, supplier updates and notifications, and what has already been decided." />
-      {d && <Summary d={d} />}
+      <PageHeader title="Inbox" description={staff ? 'Notifications and supplier updates about deliveries.' : 'Decisions your AI team needs from you, supplier updates and notifications, and what has already been decided.'} />
+      {d && !staff && <Summary d={d} />}
       <div className="flex flex-wrap items-center gap-2">
-        <Tabs label="Inbox category" value={tab} onChange={setTab} options={TABS} counts={counts ?? undefined} />
+        <Tabs label="Inbox category" value={tab} onChange={setTab} options={staff ? STAFF_TABS : TABS} counts={counts ?? undefined} />
         <SearchInput className="ml-auto w-full sm:w-64" value={search} onChange={setSearch} placeholder="Search supplier, order, agent…" label="Search the inbox" />
       </div>
       <Q q={q}>

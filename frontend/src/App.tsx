@@ -3,11 +3,13 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api/client';
 import { Layout, type Me } from './components/Layout';
-import { Loading } from './components/ui';
+import { Button, Empty, Loading } from './components/ui';
+import { canOpen } from './lib/nav';
+import { Lock } from 'lucide-react';
 import { useLive } from './hooks/useLive';
-import { LoginPage } from './pages/Login';
 import { OnboardingPage } from './pages/Onboarding';
 import { TodayPage } from './pages/Today';
+import { HomePage } from './pages/Home';
 
 // Pages other than Today load on demand, so the first screen downloads only what it needs (Recharts only on Forecast).
 const TeamPage = lazy(() => import('./pages/Team').then((m) => ({ default: m.TeamPage })));
@@ -40,15 +42,21 @@ export function App() {
     return () => window.removeEventListener('sp:unauthenticated', h);
   }, [nav]);
 
-  if (loc.pathname === '/login') return <LoginPage />;
+  // "/login" and "/signup" are the homepage with the auth dialog open; both return HomePage at the same position, so opening
+  // or closing the dialog does not remount the page.
+  if (loc.pathname === '/login' || loc.pathname === '/signup') return <HomePage auth={loc.pathname === '/signup' ? 'signup' : 'signin'} />;
   if (me.isLoading) return <div className="p-8"><Loading /></div>;
-  if (!me.data) return <Navigate to="/login" replace />;
+  // Signed-out visitors see the public homepage at "/"; every other page needs a session.
+  if (!me.data) return loc.pathname === '/' ? <HomePage /> : <Navigate to="/login" replace />;
   if (!me.data.onboardingComplete && loc.pathname !== '/onboarding') return <Navigate to="/onboarding" replace />;
   if (loc.pathname === '/onboarding') return <OnboardingPage me={me.data} />;
 
   return (
     <Layout me={me.data} connected={live.connected}>
       <Suspense fallback={<Loading rows={4} />}>
+      {!canOpen(loc.pathname, me.data.user.role) ? (
+        <NoAccess onHome={() => nav('/')} />
+      ) : (
       <Routes>
         <Route path="/" element={<TodayPage me={me.data} />} />
         <Route path="/team" element={<TeamPage me={me.data} />} />
@@ -70,7 +78,19 @@ export function App() {
         <Route path="/settings" element={<SettingsPage me={me.data} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      )}
       </Suspense>
     </Layout>
+  );
+}
+
+// Pages outside a role's navigation (lib/nav.ts); the API still enforces every permission.
+function NoAccess({ onHome }: { onHome: () => void }) {
+  return (
+    <div className="mx-auto max-w-md pt-16">
+      <Empty icon={Lock} title="Not available for your role" action={<Button variant="primary" onClick={onHome}>Go to Today</Button>}>
+        This page is for the Owner and Chef. Ask them if you need something from it.
+      </Empty>
+    </div>
   );
 }

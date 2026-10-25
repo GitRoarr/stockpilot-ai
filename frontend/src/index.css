@@ -50,6 +50,17 @@
   --chart-actual: #525252;
   --chart-forecast: #16a34a;
   --chart-primary: #16a34a;
+
+  /* Brand (homepage, sign-in and accents): deep teal to emerald, matching the logo and charts. */
+  --brand-950: #042f2e;
+  --brand-900: #0b3b36;
+  --brand-800: #115e59;
+  --brand-700: #0f766e;
+  --brand-600: #0d9488;
+  --brand-500: #10b981;
+  --brand-400: #34d399;
+  --brand-100: #ccfbf1;
+  --brand-50: #f0fdfa;
 }
 
 .dark {
@@ -93,6 +104,10 @@
   --chart-actual: #b5b5b5;
   --chart-forecast: #4ade80;
   --chart-primary: #4ade80;
+
+  --brand-600: #14b8a6;
+  --brand-100: rgb(45 212 191 / 0.18);
+  --brand-50: rgb(45 212 191 / 0.08);
 }
 
 @theme inline {
@@ -162,6 +177,16 @@
   --color-violet-300: var(--violet-300);
   --color-violet-700: var(--violet-700);
   --color-violet-800: var(--violet-800);
+
+  --color-brand-950: var(--brand-950);
+  --color-brand-900: var(--brand-900);
+  --color-brand-800: var(--brand-800);
+  --color-brand-700: var(--brand-700);
+  --color-brand-600: var(--brand-600);
+  --color-brand-500: var(--brand-500);
+  --color-brand-400: var(--brand-400);
+  --color-brand-100: var(--brand-100);
+  --color-brand-50: var(--brand-50);
 
   --shadow-card: var(--shadow);
   --shadow-pop: var(--shadow-lg);
@@ -243,10 +268,13 @@ h3 {
   background: var(--primary-soft);
 }
 
-:focus-visible {
-  outline: 2px solid var(--foreground);
-  outline-offset: 2px;
-  border-radius: 4px;
+/* In the base layer so components with their own focus ring (inputs) can opt out. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
 }
 
 * {
@@ -265,13 +293,32 @@ h3 {
   animation: var(--animate-shimmer);
 }
 
-/* Decorative background (dark surfaces only): the image is near-black in the centre with teal detail at the edges. */
-.brand-bg {
-  background: linear-gradient(rgb(10 12 11 / 0.4), rgb(10 12 11 / 0.4)), url("./assets/home-bg.webp") left center / cover no-repeat, #0d1110;
-}
+/* Decorative background for Today's greeting in dark mode: near-black centre with teal detail at the edges. */
 .dark .home-hero {
   background: linear-gradient(90deg, rgb(13 15 14 / 0.6), rgb(13 15 14 / 0.15) 55%, transparent), url("./assets/home-bg.webp") center top / cover no-repeat, var(--surface);
   border-color: var(--border-strong);
+}
+
+/* Public pages (homepage, sign-in): soft teal/emerald glows over the app background, and a faint grid. */
+.brand-canvas {
+  background:
+    radial-gradient(48rem 32rem at 8% -10%, rgb(13 148 136 / 0.14), transparent 65%),
+    radial-gradient(40rem 28rem at 100% 0%, rgb(16 185 129 / 0.12), transparent 60%),
+    radial-gradient(44rem 30rem at 50% 110%, rgb(15 118 110 / 0.1), transparent 60%),
+    var(--background);
+}
+.brand-grid {
+  background-image:
+    linear-gradient(to right, rgb(15 118 110 / 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(15 118 110 / 0.06) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+}
+.brand-panel {
+  background:
+    radial-gradient(30rem 22rem at 0% 0%, rgb(52 211 153 / 0.22), transparent 60%),
+    radial-gradient(26rem 20rem at 100% 100%, rgb(20 184 166 / 0.25), transparent 60%),
+    linear-gradient(150deg, var(--brand-900), var(--brand-950));
 }
 
 /* Theme switches should not animate every colour on the page. */

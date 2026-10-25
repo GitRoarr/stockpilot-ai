@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { navFor } from '../lib/nav';
+import { useQueryClient } from '@tanstack/react-query';
+import { canOpen, navFor, type Role } from '../lib/nav';
 import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Inbox as InboxIcon, Loader2, RotateCw, Search, X, type LucideIcon } from 'lucide-react';
 
 // Shared UI primitives (Solution Design §D8.3 states: loading, empty, error with retry, badges). All colours come from
@@ -327,18 +328,18 @@ export function Table({ head, children, className, align }: { head: ReactNode[];
 }
 
 /** Accessible dialog: labelled, Escape closes, focus moves into the dialog and returns afterwards. */
-export function Modal({ open, onClose, title, children, footer, size = 'md' }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; size?: 'md' | 'lg' }) {
+export function Modal({ open, onClose, title, children, footer, size = 'md', center = false, bare = false, closeClassName }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl'; center?: boolean; bare?: boolean; closeClassName?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const id = useId();
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
-    const first = ref.current?.querySelector<HTMLElement>('input, select, textarea, button:not([aria-label="Close"]), [href]');
+    const first = [...(ref.current?.querySelectorAll<HTMLElement>('input, select, textarea, button:not([aria-label="Close"]), [href]') ?? [])].find((el) => !el.closest('[inert]'));
     (first ?? ref.current)?.focus();
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
       if (e.key === 'Tab' && ref.current) {
-        const f = [...ref.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])')];
+        const f = [...ref.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter((el) => !el.closest('[inert]'));
         if (!f.length) return;
         if (e.shiftKey && document.activeElement === f[0]) (f[f.length - 1].focus(), e.preventDefault());
         else if (!e.shiftKey && document.activeElement === f[f.length - 1]) (f[0].focus(), e.preventDefault());
@@ -352,25 +353,40 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: {
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="animate-fade fixed inset-0 z-50 flex items-end justify-center bg-overlay sm:items-center sm:p-4" onClick={onClose} role="presentation">
+    <div className={cx('animate-fade fixed inset-0 z-50 flex justify-center bg-overlay backdrop-blur-[2px] sm:items-center sm:p-4', center ? 'items-center p-4' : 'items-end')} onClick={onClose} role="presentation">
       <div
         ref={ref}
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby={id}
-        className={cx('animate-enter max-h-[92vh] w-full overflow-auto rounded-t-2xl border border-line bg-card shadow-pop outline-none sm:rounded-2xl', size === 'lg' ? 'max-w-2xl' : 'max-w-lg')}
+        className={cx('animate-enter max-h-[92vh] w-full overflow-auto border border-line bg-card shadow-pop outline-none sm:rounded-2xl', center ? 'rounded-2xl' : 'rounded-t-2xl', size === 'xl' ? 'max-w-4xl' : size === 'lg' ? 'max-w-2xl' : size === 'sm' ? 'max-w-md' : 'max-w-lg', bare && 'relative')}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center border-b border-line px-5 py-4">
-          <h3 id={id} className="text-base font-semibold tracking-tight">
-            {title}
-          </h3>
-          <button aria-label="Close" className="ml-auto grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-raised hover:text-ink" onClick={onClose}>
-            <X aria-hidden className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="p-5">{children}</div>
+        {bare ? (
+          <>
+            {/* Bare: the content draws its own layout; the title stays as the dialog's accessible name. */}
+            <h3 id={id} className="sr-only">
+              {title}
+            </h3>
+            <button aria-label="Close" className={cx('absolute right-3 top-3 z-20 grid h-8 w-8 place-items-center rounded-lg text-muted transition-colors hover:bg-raised hover:text-ink', closeClassName)} onClick={onClose}>
+              <X aria-hidden className="h-4 w-4" />
+            </button>
+            {children}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center border-b border-line px-5 py-4">
+              <h3 id={id} className="text-base font-semibold tracking-tight">
+                {title}
+              </h3>
+              <button aria-label="Close" className="ml-auto grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-raised hover:text-ink" onClick={onClose}>
+                <X aria-hidden className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5">{children}</div>
+          </>
+        )}
         {footer && <div className="flex justify-end gap-2 border-t border-line px-5 py-4">{footer}</div>}
       </div>
     </div>
@@ -414,7 +430,7 @@ export function Field({ label, children, hint, error }: { label: string; childre
 }
 
 export const inputCls =
-  'w-full h-9 rounded-lg border border-line bg-card px-3 text-sm text-ink shadow-card outline-none transition-colors placeholder:text-muted hover:border-line-strong focus:border-muted focus:ring-[3px] focus:ring-[var(--ring)] disabled:opacity-60 [&[type=file]]:h-auto [&[type=file]]:py-1.5';
+  'w-full h-9 rounded-lg border border-line bg-card px-3 text-sm text-ink shadow-card outline-none transition-colors placeholder:text-muted hover:border-line-strong focus-visible:outline-none focus:border-muted focus:ring-[3px] focus:ring-[var(--ring)] disabled:opacity-60 [&[type=file]]:h-auto [&[type=file]]:py-1.5';
 
 export function SearchInput({ value, onChange, placeholder = 'Search…', label = 'Search', className }: { value: string; onChange: (v: string) => void; placeholder?: string; label?: string; className?: string }) {
   return (
@@ -481,6 +497,17 @@ export function ModeBadge({ mode, reason }: { mode: string; reason?: string | nu
 
 export function Json({ value }: { value: unknown }) {
   return <pre className="max-h-64 overflow-auto rounded-lg border border-line bg-raised p-2 text-[11px] leading-snug text-slate-700">{JSON.stringify(value, null, 2)}</pre>;
+}
+
+/** A link that becomes plain text when the signed-in role cannot open the target page (lib/nav.ts). */
+export function RoleLink({ to, className, children }: { to: string; className?: string; children: ReactNode }) {
+  const role = useQueryClient().getQueryData<{ user: { role: Role } }>(['me'])?.user.role;
+  if (role && !canOpen(to.split('?')[0], role)) return <span>{children}</span>;
+  return (
+    <Link to={to} className={className}>
+      {children}
+    </Link>
+  );
 }
 
 /** Initials avatar for a supplier or person (first letters of the first two words). */

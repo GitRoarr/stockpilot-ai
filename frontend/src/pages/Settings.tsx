@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, authRedirect, post, put } from '../api/client';
 import type { Me } from '../components/Layout';
-import { Building2, Clock, Loader2, Lock, FastForward, FileSignature, Monitor, Moon, Plug, RotateCcw, ShieldCheck, Sun, TimerReset, UserRound } from 'lucide-react';
+import { Building2, Clock, Loader2, FastForward, FileSignature, Monitor, Moon, Plug, RotateCcw, ShieldCheck, Sun, TimerReset, UserRound } from 'lucide-react';
 import { useTheme, type ThemePref } from '../lib/theme';
 import { useToast } from '../components/toast';
 import { agentName, Badge, Button, Card, ConfirmDialog, cx, dt, ErrorCard, Field, inputCls, PageHeader, Q, Status } from '../components/ui';
@@ -22,6 +22,7 @@ const ACTIONS: [string, string][] = [
   ['propose_working_agreement', 'Working agreements (always Owner)'],
 ];
 
+// Who sees each section: Owner manages the workspace; Chef sees the policy read-only and the data clock; Staff only their profile.
 const SECTIONS = [
   ['profile', 'Profile & appearance', UserRound],
   ['workspace', 'Workspace', Building2],
@@ -31,15 +32,23 @@ const SECTIONS = [
   ['clock', 'Data & clock', Clock],
 ] as const;
 
+const VISIBLE: Record<Me['user']['role'], string[]> = {
+  owner: ['profile', 'workspace', 'policy', 'agreements', 'integrations', 'clock'],
+  chef: ['profile', 'policy', 'integrations', 'clock'],
+  staff: ['profile'],
+};
+
 export function SettingsPage({ me }: { me: Me }) {
   const owner = me.user.role === 'owner';
+  const visible = VISIBLE[me.user.role];
+  const has = (id: string) => visible.includes(id);
   return (
     <div className="space-y-4">
-      <PageHeader title="Settings" description={owner ? 'Workspace, autonomy policy, integrations and your preferences.' : 'Your preferences. Workspace settings and the autonomy policy can only be changed by the Owner.'} />
-      <div className="grid gap-6 lg:grid-cols-[13rem_1fr]">
-        <nav aria-label="Settings sections" className="hidden lg:block">
+      <PageHeader title="Settings" description={owner ? 'Workspace, autonomy policy, integrations and your preferences.' : me.user.role === 'chef' ? 'Your preferences, the autonomy policy (set by the Owner) and integrations.' : 'Your profile and appearance.'} />
+      <div className={cx('grid gap-6', visible.length > 1 && 'lg:grid-cols-[13rem_1fr]')}>
+        <nav aria-label="Settings sections" className={cx('hidden', visible.length > 1 && 'lg:block')}>
           <ul className="sticky top-16 space-y-px text-sm">
-            {SECTIONS.map(([id, label, Ico]) => (
+            {SECTIONS.filter(([id]) => has(id)).map(([id, label, Ico]) => (
               <li key={id}>
                 <a href={`#${id}`} className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-muted hover:bg-raised hover:text-ink">
                   <Ico aria-hidden className="h-4 w-4" /> {label}
@@ -52,17 +61,31 @@ export function SettingsPage({ me }: { me: Me }) {
           <section id="profile">
             <Profile me={me} />
           </section>
-          <section id="workspace">{owner ? <General owner={owner} /> : <OwnerOnly title="Workspace" icon={Building2} text="The restaurant profile, location and morning schedule are managed by the Owner." />}</section>
-          <section id="policy">
-            <Policy owner={owner} />
-          </section>
-          <section id="agreements">{owner ? <Agreements owner={owner} /> : <OwnerOnly title="Working agreements" icon={FileSignature} text="Standing rules the team follows are approved and revoked by the Owner. Proposed rules appear in your Inbox." />}</section>
-          <section id="integrations">
-            <Integrations />
-          </section>
-          <section id="clock">
-            <DataAndClock me={me} />
-          </section>
+          {has('workspace') && (
+            <section id="workspace">
+              <General owner={owner} />
+            </section>
+          )}
+          {has('policy') && (
+            <section id="policy">
+              <Policy owner={owner} />
+            </section>
+          )}
+          {has('agreements') && (
+            <section id="agreements">
+              <Agreements owner={owner} />
+            </section>
+          )}
+          {has('integrations') && (
+            <section id="integrations">
+              <Integrations />
+            </section>
+          )}
+          {has('clock') && (
+            <section id="clock">
+              <DataAndClock me={me} />
+            </section>
+          )}
         </div>
       </div>
     </div>
@@ -71,15 +94,6 @@ export function SettingsPage({ me }: { me: Me }) {
 
 const ROLE_LABEL = { owner: 'Owner', chef: 'Chef', staff: 'Staff' } as const;
 
-function OwnerOnly({ title, icon, text }: { title: string; icon: typeof Clock; text: string }) {
-  return (
-    <Card title={title} icon={icon}>
-      <p className="flex items-center gap-2 text-sm text-muted">
-        <Lock aria-hidden className="h-4 w-4" /> {text}
-      </p>
-    </Card>
-  );
-}
 const THEME_OPTIONS: [ThemePref, string, typeof Sun][] = [
   ['light', 'Light', Sun],
   ['dark', 'Dark', Moon],

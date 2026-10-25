@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, FileImage, FileText, Loader2, PackageCheck
 import { api, post, put, upload } from '../api/client';
 import type { Me } from '../components/Layout';
 import { useToast } from '../components/toast';
-import { Badge, Button, Card, cx, dt, Empty, ErrorCard, Field, inputCls, num, PageHeader, Q, Status, Table, usd } from '../components/ui';
+import { Badge, Button, Card, cx, dt, Empty, ErrorCard, Field, inputCls, num, PageHeader, Q, RoleLink, Status, Table, usd } from '../components/ui';
 
 const RECEIVABLE = new Set(['sent', 'confirmed', 'partially_confirmed', 'partially_received']);
 const TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
@@ -329,9 +329,9 @@ export function InvoicePage({ me }: { me: Me }) {
               </Card>
               {inv.dispute && (
                 <Card title="Dispute">
-                  <Link className="font-medium text-accent hover:underline" to={`/disputes/${inv.dispute.id}`}>
+                  <RoleLink className="font-medium text-accent hover:underline" to={`/disputes/${inv.dispute.id}`}>
                     {inv.dispute.number}
-                  </Link>{' '}
+                  </RoleLink>{' '}
                   <Status s={inv.dispute.status} /> {usd(inv.dispute.amount_claimed)}
                 </Card>
               )}

@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, Bell, Boxes, ChevronDown, ChevronLeft, ClipboardList, Clock, CornerDownLeft, LogOut, Menu, MessageSquare, Monitor, Moon, Play, Search, Send, Settings, Sun, X, type LucideIcon } from 'lucide-react';
 import { api, post } from '../api/client';
-import { ALL, GROUPS, SETTINGS, type NavItem } from '../lib/nav';
+import { ALL, canSee, groupsFor, SETTINGS, type NavItem } from '../lib/nav';
 import { useTheme, type ThemePref } from '../lib/theme';
 import { useToast } from './toast';
 import { Badge, Button, cx, dt, IconButton, inputCls, LogoMark, Modal, Tip } from './ui';
@@ -58,7 +58,8 @@ export function Layout({ me, connected, children }: { me: Me; connected: boolean
   const [collapsed, setCollapsed] = useState(() => stored('sp-sidebar', 'expanded') === 'collapsed');
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
-  const decisions = inbox.data ? inbox.data.counts.proposals + inbox.data.counts.questions + inbox.data.counts.agreements : 0;
+  // Staff never decide approvals, so their Inbox shows notifications without a decision count.
+  const decisions = inbox.data && me.user.role !== 'staff' ? inbox.data.counts.proposals + inbox.data.counts.questions + inbox.data.counts.agreements : 0;
   const canRun = me.user.role !== 'staff';
   const run = useMutation({
     mutationFn: () => post<{ runId: string }>('/agent-runs', { kind: 'morning' }),
@@ -167,7 +168,7 @@ export function Layout({ me, connected, children }: { me: Me; connected: boolean
           More
         </button>
       </nav>
-      {palette && <CommandPalette onClose={() => setPalette(false)} canRun={canRun} onRun={() => run.mutate()} />}
+      {palette && <CommandPalette me={me} onClose={() => setPalette(false)} canRun={canRun} onRun={() => run.mutate()} />}
     </div>
   );
 }
@@ -220,7 +221,7 @@ function SidebarContent({ me, collapsed, decisions, onLogout }: { me: Me; collap
         )}
       </div>
       <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4" aria-label="Main">
-        {GROUPS.map((g) => {
+        {groupsFor(me.user.role).map((g) => {
           const isClosed = !collapsed && closed.includes(g.id);
           return (
             <div key={g.id}>
@@ -257,7 +258,7 @@ function SidebarContent({ me, collapsed, decisions, onLogout }: { me: Me; collap
 type Cmd = { id: string; label: string; hint: string; icon: LucideIcon; group: string; run: () => void };
 
 /** Ctrl/⌘ K: jump to pages, orders and ingredients, or run common actions. Uses data already loaded by the app. */
-function CommandPalette({ onClose, canRun, onRun }: { onClose: () => void; canRun: boolean; onRun: () => void }) {
+function CommandPalette({ me, onClose, canRun, onRun }: { me: Me; onClose: () => void; canRun: boolean; onRun: () => void }) {
   const nav = useNavigate();
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);
@@ -270,7 +271,7 @@ function CommandPalette({ onClose, canRun, onRun }: { onClose: () => void; canRu
   const cmds = useMemo<Cmd[]>(() => {
     const t = q.trim().toLowerCase();
     const hit = (...f: string[]) => !t || f.some((x) => x.toLowerCase().includes(t));
-    const pages: Cmd[] = ALL.filter((p) => hit(p.label, p.description, p.group)).map((p) => ({ id: `p${p.to}`, label: p.label, hint: p.description, icon: p.icon, group: 'Pages', run: go(p.to) }));
+    const pages: Cmd[] = ALL.filter((p) => canSee(p, me.user.role) && hit(p.label, p.description, p.group)).map((p) => ({ id: `p${p.to}`, label: p.label, hint: p.description, icon: p.icon, group: 'Pages', run: go(p.to) }));
     const actions: Cmd[] = [
       ...(canRun ? [{ id: 'a-run', label: 'Run morning plan', hint: 'Forecast, compare suppliers and draft orders', icon: Play, group: 'Actions', run: () => (onRun(), onClose()) }] : []),
       { id: 'a-msg', label: 'Message the team', hint: 'Open team chat', icon: MessageSquare, group: 'Actions', run: go('/team?tab=chat') },
@@ -289,7 +290,7 @@ function CommandPalette({ onClose, canRun, onRun }: { onClose: () => void; canRu
           .map((i) => ({ id: `i${i.id}`, label: i.name, hint: `${i.status} · ${i.onHand} ${i.unit} on hand`, icon: Boxes, group: 'Ingredients', run: go('/inventory') }))
       : [];
     return [...actions, ...pages, ...po, ...ing];
-  }, [q, orders.data, ingredients.data, canRun]);
+  }, [q, orders.data, ingredients.data, canRun, me.user.role]);
   useEffect(() => setActive(0), [q]);
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') (e.preventDefault(), setActive((a) => Math.min(a + 1, cmds.length - 1)));

@@ -6,7 +6,7 @@ import { Thread } from '../components/Thread';
 import { CalendarDays, ListChecks, Plus, User } from 'lucide-react';
 import { AgentAvatar } from '../components/AgentAvatar';
 import { useToast } from '../components/toast';
-import { agentName, Badge, Button, Card, cx, dt, Empty, ErrorCard, Field, inputCls, Json, Modal, PageHeader, Q, SearchInput, Status, Table, Tabs } from '../components/ui';
+import { agentName, Badge, Button, Card, cx, dt, Empty, ErrorCard, Field, inputCls, Json, Modal, PageHeader, Q, RoleLink, SearchInput, Status, Table, Tabs } from '../components/ui';
 
 // Shared task board (FR-113 – FR-115): humans and agents; assigning to an agent starts a run.
 const COLS = ['todo', 'in_progress', 'waiting', 'blocked', 'done'] as const;
@@ -236,7 +236,7 @@ export function TaskDetailPage() {
                 {assignee(t)} {t.parent_id && <Link className="text-accent" to={`/tasks/${t.parent_id}`}>Parent task</Link>}
                 {t.linked_type === 'purchase_order' && <Link className="text-accent" to={`/orders/${t.linked_id}`}>Linked PO</Link>}
                 {t.linked_type === 'invoice' && <Link className="text-accent" to={`/receiving/invoices/${t.linked_id}`}>Linked invoice</Link>}
-                {t.linked_type === 'dispute' && <Link className="text-accent" to={`/disputes/${t.linked_id}`}>Linked dispute</Link>}
+                {t.linked_type === 'dispute' && <RoleLink className="text-accent" to={`/disputes/${t.linked_id}`}>Linked dispute</RoleLink>}
                 <span className="ml-auto text-xs text-muted">created {dt(t.created_at)}</span>
               </div>
               {t.description && <p className="mt-2 text-sm">{t.description}</p>}
@@ -281,9 +281,9 @@ export function TaskDetailPage() {
               <ul className="space-y-1 text-sm">
                 {t.runs.map((r: any) => (
                   <li key={r.id}>
-                    <Link className="hover:underline" to={`/activity/runs/${r.id}`}>
+                    <RoleLink className="hover:underline" to={`/activity/runs/${r.id}`}>
                       {agentName(r.agent_id)} · {dt(r.started_at)}
-                    </Link>{' '}
+                    </RoleLink>{' '}
                     <Status s={r.status} /> {r.mode === 'deterministic' && <Badge>rules engine</Badge>}
                   </li>
                 ))}

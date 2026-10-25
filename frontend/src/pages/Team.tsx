@@ -5,7 +5,7 @@ import { api, post } from '../api/client';
 import type { Me } from '../components/Layout';
 import { Thread } from '../components/Thread';
 import { Bot, Check, Clock, Info, ListChecks, MessageSquare, Minus, Pause, Play, ShieldCheck, Sparkles, Timer, Users } from 'lucide-react';
-import { ago, Badge, Button, Card, cx, dt, Empty, inputCls, Kpi, Modal, num, PageHeader, Q, SearchInput, Status, Table, Tabs, usd, type Tone } from '../components/ui';
+import { ago, Badge, Button, Card, cx, dt, Empty, inputCls, Kpi, Modal, num, PageHeader, Q, RoleLink, SearchInput, Status, Table, Tabs, usd, type Tone } from '../components/ui';
 import { AgentAvatar } from '../components/AgentAvatar';
 
 // Team page (FR-112, FR-120): AI agents (profiles, permissions, status, tasks, runs, scorecards), the people on the
@@ -272,9 +272,9 @@ function AgentCard({ a, owner, onOpen }: { a: any; owner: boolean; onOpen: () =>
           <ul className="mt-1 space-y-0.5">
             {a.lastRuns.map((r: any) => (
               <li key={r.id} className="truncate">
-                <Link to={`/activity/runs/${r.id}`} className="hover:underline">
+                <RoleLink to={`/activity/runs/${r.id}`} className="hover:underline">
                   {dt(r.started_at)}
-                </Link>{' '}
+                </RoleLink>{' '}
                 <Status s={r.status} /> {r.mode === 'deterministic' && <Badge>rules engine</Badge>}
               </li>
             ))}

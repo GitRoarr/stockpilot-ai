@@ -33,7 +33,8 @@ export function TodayPage({ me }: { me: Me }) {
     },
     onError: (e) => toast('error', 'Could not start the morning plan', (e as Error).message),
   });
-  const canRun = me.user.role !== 'staff';
+  const staff = me.user.role === 'staff';
+  const canRun = !staff;
   const hour = new Date().getHours();
   const d = q.data;
   const waiting = d ? d.decisions.proposals + d.decisions.questions + d.decisions.agreements : 0;
@@ -60,10 +61,16 @@ export function TodayPage({ me }: { me: Me }) {
           }
           actions={
             <>
-              <Link to="/inbox" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line-strong bg-card px-3 text-sm font-medium shadow-card hover:bg-raised">
-                <Inbox aria-hidden className="h-3.5 w-3.5" /> Review decisions
-                {waiting > 0 && <span className="rounded bg-amber-100 px-1.5 text-xs font-semibold tabular-nums text-amber-800">{waiting}</span>}
-              </Link>
+              {staff ? (
+                <Link to="/receiving" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent px-3.5 text-sm font-medium text-on-accent shadow-card hover:bg-accent-strong">
+                  <Truck aria-hidden className="h-4 w-4" /> Receive deliveries
+                </Link>
+              ) : (
+                <Link to="/inbox" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line bg-card px-3.5 text-sm font-medium shadow-card hover:bg-raised">
+                  <Inbox aria-hidden className="h-4 w-4" /> Review decisions
+                  {waiting > 0 && <span className="rounded bg-amber-100 px-1.5 text-xs font-semibold tabular-nums text-amber-800">{waiting}</span>}
+                </Link>
+              )}
               {canRun && (
                 <Button variant="primary" icon={Play} busy={run.isPending} onClick={() => run.mutate()}>
                   Run morning plan
@@ -76,7 +83,21 @@ export function TodayPage({ me }: { me: Me }) {
       {run.error && <ErrorCard error={run.error} />}
 
       <Q q={q}>
-        {(d) => (
+        {(d) =>
+          staff ? (
+            // Staff: the receiving desk — deliveries, receiving issues, stock at risk and the week ahead (SRS US-08, FR-080).
+            <div className="grid gap-5 xl:grid-cols-3">
+              <div className="min-w-0 space-y-5 xl:col-span-2">
+                <Deliveries rows={d.deliveries} />
+                <InventoryAtRisk d={d} />
+              </div>
+              <div className="min-w-0 space-y-5">
+                <ReceivingIssues r={{ ...d.receiving, disputes: [] }} title="Invoices to review" />
+                <InventoryHealth h={d.inventoryHealth} />
+                <Outlook d={d} link={false} />
+              </div>
+            </div>
+          ) : (
           <div className="space-y-5">
             <KpiCards d={d} />
             <div className="grid gap-5 xl:grid-cols-3">
@@ -98,7 +119,8 @@ export function TodayPage({ me }: { me: Me }) {
               </div>
             </div>
           </div>
-        )}
+          )
+        }
       </Q>
     </div>
   );
@@ -494,10 +516,10 @@ function Deliveries({ rows }: { rows: any[] }) {
   );
 }
 
-function ReceivingIssues({ r }: { r: { invoices: any[]; disputes: any[] } }) {
+function ReceivingIssues({ r, title = 'Receiving & disputes' }: { r: { invoices: any[]; disputes: any[] }; title?: string }) {
   const has = r.invoices.length || r.disputes.length;
   return (
-    <Card title="Receiving & disputes" icon={Scale} pad={false}>
+    <Card title={title} icon={Scale} pad={false}>
       {has ? (
         <ul className="divide-y divide-line text-sm">
           {r.invoices.map((i) => (
@@ -660,15 +682,17 @@ function Items({ items }: { items: any[] }) {
   );
 }
 
-function Outlook({ d }: { d: any }) {
+function Outlook({ d, link = true }: { d: any; link?: boolean }) {
   return (
     <Card
       title="Next 7 days"
       icon={CloudRain}
       actions={
-        <Link to="/forecast" className="text-xs font-medium text-accent hover:underline">
-          Forecast
-        </Link>
+        link && (
+          <Link to="/forecast" className="text-xs font-medium text-accent hover:underline">
+            Forecast
+          </Link>
+        )
       }
     >
       <div className="grid grid-cols-7 gap-1">

@@ -1,7 +1,10 @@
 import { Activity, Boxes, ChartLine, ClipboardList, House, Inbox, ListChecks, PiggyBank, Scale, Settings, Truck, Users, type LucideIcon } from 'lucide-react';
 
 // Application navigation: one source for the sidebar, the command palette and page breadcrumbs.
-export type NavItem = { to: string; label: string; icon: LucideIcon; description: string };
+export type Role = 'owner' | 'chef' | 'staff';
+/** `roles` limits who sees an entry; omitted = everyone. Staff receive deliveries, count stock and capture invoices (SRS US-08, FR-080). */
+export type NavItem = { to: string; label: string; icon: LucideIcon; description: string; roles?: Role[] };
+const MANAGERS: Role[] = ['owner', 'chef'];
 export const GROUPS: { id: string; label: string; items: NavItem[] }[] = [
   {
     id: 'operations',
@@ -11,16 +14,16 @@ export const GROUPS: { id: string; label: string; items: NavItem[] }[] = [
       { to: '/inbox', label: 'Inbox', icon: Inbox, description: 'Approvals, questions and notifications' },
       { to: '/orders', label: 'Orders', icon: ClipboardList, description: 'Purchase orders from approval to delivery' },
       { to: '/receiving', label: 'Receiving', icon: Truck, description: 'Deliveries and invoice matching' },
-      { to: '/disputes', label: 'Disputes', icon: Scale, description: 'Credit requests to suppliers' },
+      { to: '/disputes', label: 'Disputes', icon: Scale, description: 'Credit requests to suppliers', roles: MANAGERS },
     ],
   },
   {
     id: 'planning',
     label: 'Planning',
     items: [
-      { to: '/forecast', label: 'Forecast', icon: ChartLine, description: 'Demand, weather and holidays' },
+      { to: '/forecast', label: 'Forecast', icon: ChartLine, description: 'Demand, weather and holidays', roles: MANAGERS },
       { to: '/inventory', label: 'Inventory', icon: Boxes, description: 'Ingredients, sales, suppliers and menu' },
-      { to: '/savings', label: 'Savings', icon: PiggyBank, description: 'Realized and projected savings' },
+      { to: '/savings', label: 'Savings', icon: PiggyBank, description: 'Realized and projected savings', roles: MANAGERS },
     ],
   },
   {
@@ -29,7 +32,7 @@ export const GROUPS: { id: string; label: string; items: NavItem[] }[] = [
     items: [
       { to: '/team', label: 'Team', icon: Users, description: 'AI agents, people and roles' },
       { to: '/tasks', label: 'Tasks', icon: ListChecks, description: 'Shared work between people and agents' },
-      { to: '/activity', label: 'Activity', icon: Activity, description: 'Agent runs, audit trail and outbox' },
+      { to: '/activity', label: 'Activity', icon: Activity, description: 'Agent runs, audit trail and outbox', roles: MANAGERS },
     ],
   },
 ];
@@ -38,3 +41,11 @@ export const ALL: (NavItem & { group: string })[] = [...GROUPS.flatMap((g) => g.
 
 /** The navigation entry for a path (longest matching prefix; "/" only matches exactly). */
 export const navFor = (path: string) => ALL.find((i) => (i.to === '/' ? path === '/' : path === i.to || path.startsWith(`${i.to}/`)));
+
+export const canSee = (item: NavItem, role: Role) => !item.roles || item.roles.includes(role);
+export const groupsFor = (role: Role) => GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => canSee(i, role)) })).filter((g) => g.items.length);
+/** Whether a role may open a path; detail pages inherit their section's roles. */
+export const canOpen = (path: string, role: Role) => {
+  const item = navFor(path);
+  return !item || canSee(item, role);
+};
