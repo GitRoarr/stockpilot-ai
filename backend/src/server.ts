@@ -63,7 +63,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   await app.register(portalPages);
 
   // Production: the API serves the built web app on the same port (Solution Design §D10.3).
-  const webDist = path.join(REPO_ROOT, 'apps/web/dist');
+  const webDist = path.join(REPO_ROOT, 'frontend/dist');
   if (existsSync(path.join(webDist, 'index.html')) && config.NODE_ENV !== 'test') {
     await app.register(fastifyStatic, { root: webDist, wildcard: false });
   }

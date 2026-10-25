@@ -6,21 +6,21 @@
   "type": "module",
   "workspaces": [
     "packages/shared",
-    "apps/api",
-    "apps/web"
+    "backend",
+    "frontend"
   ],
   "engines": {
     "node": ">=22.13"
   },
   "scripts": {
-    "dev": "concurrently -k -n api,web -c blue,green \"npm run dev -w apps/api\" \"npm run dev -w apps/web\"",
-    "seed": "npm run seed -w apps/api",
-    "test": "npm run test -w apps/api",
-    "eval": "npm run eval -w apps/api --",
-    "smoke": "npm run smoke -w apps/api",
-    "typecheck": "npm run typecheck -w apps/api && npm run typecheck -w apps/web",
-    "build": "npm run build -w apps/web",
-    "start": "npm run start -w apps/api",
+    "dev": "concurrently -k -n api,web -c blue,green \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "seed": "npm run seed -w backend",
+    "test": "npm run test -w backend",
+    "eval": "npm run eval -w backend --",
+    "smoke": "npm run smoke -w backend",
+    "typecheck": "npm run typecheck -w backend && npm run typecheck -w frontend",
+    "build": "npm run build -w frontend",
+    "start": "npm run start -w backend",
     "e2e": "npm run build && playwright test"
   },
   "devDependencies": {

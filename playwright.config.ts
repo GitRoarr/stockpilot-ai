@@ -21,7 +21,7 @@ export default defineConfig({
   reporter: [['list']],
   use: { baseURL: `http://127.0.0.1:${PORT}`, channel: 'chrome', headless: true, screenshot: 'only-on-failure', viewport: { width: 1360, height: 900 } },
   webServer: {
-    command: 'npm run seed -w apps/api -- --offline && npm run start -w apps/api',
+    command: 'npm run seed -w backend -- --offline && npm run start -w backend',
     url: `http://127.0.0.1:${PORT}/api/health`,
     env,
     timeout: 120_000,
