@@ -1,0 +1,16 @@
+{
+  "supplierName": "Golden Gate Foodservice",
+  "invoiceNumber": "INV-GG-20817",
+  "date": "2026-10-26",
+  "currency": "USD",
+  "lines": [
+    { "description": "Beef patty 6 oz", "sku": "GG-44120", "qty": 96, "unit": "each", "unitPrice": 1.62, "extended": 155.52, "confidence": 0.97 },
+    { "description": "Chicken thigh, boneless", "sku": "GG-23310", "qty": 40, "unit": "lb", "unitPrice": 3.25, "extended": 130.0, "confidence": 0.96 },
+    { "description": "Fries 3/8\" frozen", "sku": "GG-81002", "qty": 60, "unit": "lb", "unitPrice": 1.1, "extended": 66.0, "confidence": 0.97 }
+  ],
+  "subtotal": 351.52,
+  "tax": 0,
+  "deliveryFee": 25.0,
+  "total": 376.52,
+  "fieldConfidence": { "invoiceNumber": 0.99, "date": 0.95, "total": 0.99 }
+}
