@@ -5,6 +5,7 @@ import { db } from '../src/db/sqlite.js';
 import { drainJobs } from '../src/jobs/worker.js';
 import { setFetch } from '../src/integrations/http.js';
 import { brevoConfigured, sendBrevo } from '../src/integrations/brevo.js';
+import { queueEmail } from '../src/services/email.js';
 import { filterHolidays, fetchHolidays } from '../src/integrations/nagerDate.js';
 import { fetchForecast } from '../src/integrations/openMeteo.js';
 import { fromInteractionSteps, toInteractionSteps } from '../src/agents/llm/interactions.js';
@@ -117,14 +118,14 @@ describe('Brevo via the outbox (AC-090)', () => {
 
 describe('Brevo sender configuration', () => {
   it('BREVO_SENDER_EMAIL / BREVO_SENDER_NAME are used as the sender and take precedence over EMAIL_FROM', async () => {
-    setConfig({ BREVO_API_KEY: 'key', BREVO_SENDER_EMAIL: 'orders@harborvine.example', BREVO_SENDER_NAME: 'Harbor & Vine Purchasing', EMAIL_FROM: 'old@stockpilot.example' });
+    setConfig({ BREVO_API_KEY: 'key', BREVO_SENDER_EMAIL: 'orders@harborvine.com', BREVO_SENDER_NAME: 'Harbor & Vine Purchasing', EMAIL_FROM: 'old@stockpilot.example' });
     let body: any;
     setFetch((async (_u: string, init: RequestInit) => {
       body = JSON.parse(String(init.body));
       return json(201, { messageId: '<m1@brevo>' });
     }) as never);
-    expect(await sendBrevo({ to: 'chef@harborvine.example', subject: 's', html: '<p>h</p>', text: 't' })).toEqual({ ok: true, messageId: '<m1@brevo>' });
-    expect(body.sender).toEqual({ email: 'orders@harborvine.example', name: 'Harbor & Vine Purchasing' });
+    expect(await sendBrevo({ to: 'chef@harborvine.com', subject: 's', html: '<p>h</p>', text: 't' })).toEqual({ ok: true, messageId: '<m1@brevo>' });
+    expect(body.sender).toEqual({ email: 'orders@harborvine.com', name: 'Harbor & Vine Purchasing' });
   });
   it('the earlier EMAIL_FROM still works, and without any sender Brevo reports not configured', async () => {
     setConfig({ BREVO_API_KEY: 'key', BREVO_SENDER_EMAIL: undefined, BREVO_SENDER_NAME: undefined, EMAIL_FROM: 'old@stockpilot.example' });
@@ -132,6 +133,18 @@ describe('Brevo sender configuration', () => {
     setConfig({ EMAIL_FROM: undefined });
     expect(brevoConfigured()).toBe(false);
     expect(await sendBrevo({ to: 'x@y.example', subject: 's', html: '', text: '' })).toMatchObject({ ok: false, message: 'not_configured' });
+  });
+});
+
+describe('demo-mode email safety (SAF-6)', () => {
+  it('redirects every recipient to the demo inbox, including real-looking domains of the sample users', async () => {
+    app = await setup({ llm: null });
+    setConfig({ DEMO_MODE: true, SUPPLIER_EMAIL_OVERRIDE: 'inbox@stockpilot.example' });
+    for (const to of ['sara@harborvine.com', 'orders@goldengate.example', 'someone@gmail.com']) {
+      const eid = queueEmail({ kind: 'briefing', to, subject: 's', html: '', text: '' });
+      expect(db().get<{ to_email: string }>(`SELECT to_email FROM email_messages WHERE id = ?`, eid)!.to_email).toBe('inbox@stockpilot.example');
+    }
+    setConfig({ SUPPLIER_EMAIL_OVERRIDE: undefined });
   });
 });
 

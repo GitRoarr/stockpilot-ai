@@ -47,8 +47,9 @@ export function queueEmail(e: {
     const existing = db().get<{ id: string }>(`SELECT id FROM email_messages WHERE idempotency_key = ?`, e.idempotencyKey);
     if (existing) return existing.id;
   }
-  // Demo mode never emails the reserved .example addresses of the seed: they go to the demo inbox instead.
-  if (config.DEMO_MODE && /\.example$/i.test(e.to)) e = { ...e, to: config.SUPPLIER_EMAIL_OVERRIDE ?? senderEmail() ?? e.to };
+  // Demo mode emails nobody outside: every message (supplier orders, disputes, standups for the sample users, whose
+  // domain is not ours) goes to the demo inbox instead (SRS SAF-6).
+  if (config.DEMO_MODE) e = { ...e, to: config.SUPPLIER_EMAIL_OVERRIDE ?? senderEmail() ?? e.to };
   const eid = id('eml');
   db().run(
     `INSERT INTO email_messages (id, kind, to_email, to_name, subject, html, text, status, related_type, related_id, idempotency_key, created_at)

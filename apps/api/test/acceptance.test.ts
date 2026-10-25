@@ -174,7 +174,7 @@ describe('AC-110 / AC-114 — hire the team, then the first morning run', () => 
   it('a freshly deployed team can run its first morning run; each delegated child task links its run trace', async () => {
     app = await setup({ llm: null, seed: false });
     const { hashPassword } = await import('../src/auth/password.js');
-    db().run(`INSERT INTO users (id, name, email, role, password_hash, created_at) VALUES ('usr_o','Sara','sara@harborvine.example','owner',?,?)`, await hashPassword('harborvine2026'), new Date().toISOString());
+    db().run(`INSERT INTO users (id, name, email, role, password_hash, created_at) VALUES ('usr_o','Sara','sara@harborvine.com','owner',?,?)`, await hashPassword('harborvine2026'), new Date().toISOString());
     const owner = await login(app, OWNER);
     expect((await api(app, owner).post('/templates/restaurant-purchasing-team/deploy', {})).status).toBe(200);
     const r = await api(app, owner).post('/agent-runs', { kind: 'morning' });

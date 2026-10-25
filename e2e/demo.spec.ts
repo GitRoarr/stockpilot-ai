@@ -19,7 +19,7 @@ async function login(page: Page, email: string) {
 test.describe.configure({ mode: 'serial' });
 
 test('morning run → approve → supplier shortage → replan → receive → invoice → dispute', async ({ page, browser }) => {
-  await login(page, 'daniel@harborvine.example');
+  await login(page, 'daniel@harborvine.com');
   await expect(page.getByText('Harbor & Vine Bistro').first()).toBeVisible();
   await shot(page, '01-today-empty');
 
@@ -79,7 +79,7 @@ test('morning run → approve → supplier shortage → replan → receive → i
 
   // E2E-6: Staff receives the delivery (pre-filled 30 lb) and uploads the sample invoice.
   await page.context().clearCookies();
-  await login(page, 'leo@harborvine.example');
+  await login(page, 'leo@harborvine.com');
   await page.goto('/receiving');
   await page.locator('li', { hasText: 'Golden Gate Foodservice' }).getByRole('link', { name: 'Receive' }).click();
   await expect(page.locator('li', { hasText: 'Chicken thigh' }).getByLabel(/Received/)).toHaveValue('30');
@@ -109,7 +109,7 @@ test('morning run → approve → supplier shortage → replan → receive → i
 
 test('mobile Inbox and Team render at 360 px (NFR-USE-1)', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 760 });
-  await login(page, 'sara@harborvine.example');
+  await login(page, 'sara@harborvine.com');
   await page.getByRole('navigation', { name: 'Mobile' }).getByRole('link', { name: /Inbox/ }).click();
   await expect(page.getByRole('heading', { name: 'Inbox' })).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -123,7 +123,7 @@ test('mobile Inbox and Team render at 360 px (NFR-USE-1)', async ({ page }) => {
 test('every page renders without errors (D8.2)', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await login(page, 'sara@harborvine.example');
+  await login(page, 'sara@harborvine.com');
   const pages: [string, RegExp][] = [
     ['/team', /Your AI purchasing team/],
     ['/team?tab=chat', /Team chat/],
@@ -157,7 +157,7 @@ test('every page renders without errors (D8.2)', async ({ page }) => {
 test('data entry forms: dish, sales, supplier, offer and reorder level are saved and used', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await login(page, 'daniel@harborvine.example');
+  await login(page, 'daniel@harborvine.com');
 
   // Menu: a new dish with its recipe.
   await page.goto('/inventory?tab=menu');
@@ -213,7 +213,7 @@ test('data entry forms: dish, sales, supplier, offer and reorder level are saved
 test('CSV: inventory export, inventory import and sales import with preview', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await login(page, 'daniel@harborvine.example');
+  await login(page, 'daniel@harborvine.com');
 
   await page.goto('/inventory');
   const download = page.waitForEvent('download');
@@ -249,7 +249,7 @@ test('CSV: inventory export, inventory import and sales import with preview', as
 
 test('theme: light, dark and system preferences apply everywhere and persist across reloads', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
-  await login(page, 'daniel@harborvine.example');
+  await login(page, 'daniel@harborvine.com');
   const isDark = () => page.evaluate(() => document.documentElement.classList.contains('dark'));
   const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   expect(await isDark()).toBe(false);
@@ -281,7 +281,7 @@ test('theme: light, dark and system preferences apply everywhere and persist acr
 
 test('settings: time travel and workspace data reset, with confirmation', async ({ page }) => {
   test.setTimeout(240_000);
-  await login(page, 'sara@harborvine.example');
+  await login(page, 'sara@harborvine.com');
   await page.goto('/settings#clock');
   await page.getByRole('button', { name: '+1 h' }).click();
   await expect(page.getByText(/^Clock now/)).toBeVisible();
@@ -297,6 +297,6 @@ test('settings: time travel and workspace data reset, with confirmation', async 
   await page.getByRole('button', { name: 'Reset workspace data…' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete and reset' }).click();
   await expect(page.getByText('Data reset complete. Sign in again to continue.')).toBeVisible({ timeout: 150_000 });
-  await login(page, 'sara@harborvine.example');
+  await login(page, 'sara@harborvine.com');
   await expect(page.getByText('No morning run yet')).toBeVisible();
 });

@@ -6,9 +6,9 @@ import { ThemeMenu } from '../components/Layout';
 import { Button, cx, Field, inputCls, LogoMark } from '../components/ui';
 
 const ROLES = [
-  ['Owner', 'sara@harborvine.example'],
-  ['Chef', 'daniel@harborvine.example'],
-  ['Staff', 'leo@harborvine.example'],
+  ['Owner', 'sara@harborvine.com'],
+  ['Chef', 'daniel@harborvine.com'],
+  ['Staff', 'leo@harborvine.com'],
 ];
 
 const AGENTS = [
@@ -20,7 +20,7 @@ const AGENTS = [
 
 export function LoginPage() {
   const qc = useQueryClient();
-  const [email, setEmail] = useState('daniel@harborvine.example');
+  const [email, setEmail] = useState('daniel@harborvine.com');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);

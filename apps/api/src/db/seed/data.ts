@@ -150,9 +150,9 @@ export const WEEKDAY_FACTOR = [1.05, 0.75, 0.8, 0.9, 1.0, 1.3, 1.4];
 export const RAIN_EFFECT = -0.1;
 
 export const USERS = [
-  { id: 'usr_sara', name: 'Sara (Owner)', email: 'sara@harborvine.example', role: 'owner' },
-  { id: 'usr_daniel', name: 'Daniel (Chef)', email: 'daniel@harborvine.example', role: 'chef' },
-  { id: 'usr_leo', name: 'Leo (Staff)', email: 'leo@harborvine.example', role: 'staff' },
+  { id: 'usr_sara', name: 'Sara (Owner)', email: 'sara@harborvine.com', role: 'owner' },
+  { id: 'usr_daniel', name: 'Daniel (Chef)', email: 'daniel@harborvine.com', role: 'chef' },
+  { id: 'usr_leo', name: 'Leo (Staff)', email: 'leo@harborvine.com', role: 'staff' },
 ] as const;
 export const DEMO_PASSWORD = 'harborvine2026';
 

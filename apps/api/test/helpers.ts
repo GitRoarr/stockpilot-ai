@@ -54,6 +54,6 @@ function safeJson(s: string): any {
   }
 }
 
-export const OWNER = 'sara@harborvine.example';
-export const CHEF = 'daniel@harborvine.example';
-export const STAFF = 'leo@harborvine.example';
+export const OWNER = 'sara@harborvine.com';
+export const CHEF = 'daniel@harborvine.com';
+export const STAFF = 'leo@harborvine.com';
