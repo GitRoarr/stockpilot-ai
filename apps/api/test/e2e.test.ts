@@ -109,6 +109,13 @@ describe('morning run without a Gemini key (E2E-2, AC-061, AC-114, AC-055)', () 
     expect(db().get<{ n: number }>(`SELECT COUNT(*) AS n FROM agent_runs WHERE run_key LIKE '%:morning'`)!.n).toBe(1);
     const mails = db().all<{ to_email: string }>(`SELECT to_email FROM email_messages WHERE kind = 'briefing'`);
     expect(new Set(mails.map((m) => m.to_email)).size).toBe(mails.length);
+    // The newer plan replaced the still-unapproved orders instead of duplicating them (FR-070): one Golden Gate order
+    // awaits approval, identical in value, and the earlier one is cancelled as superseded.
+    const gg = db().all<{ id: string; total: number }>(`SELECT p.id, p.total FROM purchase_orders p WHERE p.supplier_id = 'sup_gg' AND p.status = 'pending_approval'`);
+    expect(gg).toHaveLength(1);
+    expect(gg[0].total).toBe(366.92);
+    expect(db().get<{ status: string; note: string }>(`SELECT status, note FROM purchase_orders WHERE id = ?`, st.ggPo)).toEqual({ status: 'cancelled', note: 'Superseded by a newer plan' });
+    st.ggPo = gg[0].id;
   });
 });
 

@@ -34,7 +34,7 @@ label{font-size:13px;display:block}input,select,textarea{font:inherit;padding:8p
 button{font:inherit;background:var(--accent);color:#fff;border:0;border-radius:8px;padding:12px 18px;cursor:pointer;width:100%}
 .ok{color:var(--accent);font-weight:600}.badge{display:inline-block;font-size:11px;border:1px solid var(--warn);color:var(--warn);border-radius:99px;padding:1px 8px}
 table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:6px;border-bottom:1px solid var(--line);font-size:14px}
-</style></head><body><main><p class="muted">StockPilot AI · supplier portal <span class="badge">Illustrative demo data</span></p>${body}</main></body></html>`;
+</style></head><body><main><p class="muted">StockPilot AI · supplier portal </p>${body}</main></body></html>`;
 }
 
 function errorPage(reply: FastifyReply, e: unknown) {

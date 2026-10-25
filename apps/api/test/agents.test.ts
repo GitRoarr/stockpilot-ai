@@ -205,7 +205,7 @@ describe('hire from template (AC-110)', () => {
   it('deploys four agents, the policy, the 06:00 schedule and onboarding tasks into an empty workspace', async () => {
     app = await setup({ llm: null, seed: false });
     const { hashPassword } = await import('../src/auth/password.js');
-    db().run(`INSERT INTO users (id, name, email, role, password_hash, created_at) VALUES ('usr_o','O','sara@harborvine.example','owner',?,?)`, await hashPassword('stockpilot-demo'), new Date().toISOString());
+    db().run(`INSERT INTO users (id, name, email, role, password_hash, created_at) VALUES ('usr_o','O','sara@harborvine.example','owner',?,?)`, await hashPassword('harborvine2026'), new Date().toISOString());
     const owner = await login(app, OWNER);
     const r = await api(app, owner).post('/templates/restaurant-purchasing-team/deploy', { autonomy: { preset: 'balanced', chefApprovalLimit: 1500 }, schedule: { morningRunTime: '06:00' } });
     expect(r.status).toBe(200);

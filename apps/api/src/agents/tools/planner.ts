@@ -62,7 +62,7 @@ export const getBacktestReport: ToolDef<Record<string, never>> = {
       rainEffectPct: i.beta ? r1(i.beta.rain * 100) : null,
     }));
     const beats = rows.filter((r) => (r.wapePct[r.selected] ?? 999) <= (r.wapePct.M1 ?? 0)).length;
-    return { modelRunId: fc.modelRunId, items: rows, itemsAtOrBelowNaive: beats, itemCount: rows.length, note: 'Illustrative demo data: accuracy demonstrates the pipeline, not real-world accuracy.' };
+    return { modelRunId: fc.modelRunId, items: rows, itemsAtOrBelowNaive: beats, itemCount: rows.length, note: 'Rolling-origin backtest on recent daily sales' };
   },
 };
 

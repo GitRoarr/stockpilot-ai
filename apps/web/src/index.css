@@ -1,32 +1,283 @@
 @import "tailwindcss";
 
-/* Design tokens (Solution Design §D8): light working UI, blue accent, monospace figures. */
+/*
+ * StockPilot design system. One set of semantic tokens (CSS variables) drives every component; `.dark` on <html>
+ * swaps their values. Utility names used across the app (bg-card, text-muted, border-line, bg-amber-50, …) are mapped
+ * to these variables, so no component carries separate light and dark styles.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #f6f7f6;
+  --foreground: #121815;
+  --surface: #ffffff;
+  --surface-muted: #f2f4f3;
+  --border: #e2e6e3;
+  --border-strong: #c9d0cb;
+  --muted-foreground: #5b6760;
+  --primary: #15803d;
+  --primary-hover: #166534;
+  --primary-foreground: #ffffff;
+  --primary-soft: rgb(21 128 61 / 0.09);
+  --success: #15803d;
+  --warning: #b45309;
+  --destructive: #c42b2b;
+  --info: #1d5fd1;
+  --sidebar-background: #0f1412;
+  --sidebar-foreground: #c7cfca;
+  --sidebar-muted: #8a958f;
+  --sidebar-border: #1f2724;
+  --sidebar-hover: #1a211e;
+  --sidebar-active: #1d2a23;
+  --ring: rgb(21 128 61 / 0.45);
+  --shadow: 0 1px 2px rgb(16 24 20 / 0.06);
+  --shadow-lg: 0 12px 32px -8px rgb(16 24 20 / 0.22);
+  --overlay: rgb(10 14 12 / 0.45);
+
+  /* Status scales (light): tinted backgrounds, dark foregrounds. */
+  --slate-50: #f6f7f6; --slate-100: #eef1ef; --slate-200: #e2e6e3; --slate-300: #c3cbc6; --slate-600: #56625b; --slate-700: #3c4741;
+  --blue-50: #eef4ff; --blue-100: #dde8fd; --blue-200: #c2d5fb; --blue-300: #93b4f5; --blue-500: #2f6fe0; --blue-600: #1d5fd1; --blue-700: #1a4fae;
+  --emerald-50: #ecf8f0; --emerald-200: #bfe6cc; --emerald-300: #93d3aa; --emerald-500: #16a34a; --emerald-700: #15803d; --emerald-800: #166534;
+  --amber-50: #fff8eb; --amber-100: #fdedc8; --amber-200: #f8d993; --amber-300: #f2c15c; --amber-400: #f0a92a; --amber-500: #d98a0b; --amber-700: #a85a06; --amber-800: #8a4807; --amber-900: #6f3a09;
+  --red-50: #fdf0f0; --red-200: #f5c9c9; --red-300: #eda5a5; --red-400: #e27474; --red-500: #d64545; --red-600: #c42b2b; --red-700: #a82424; --red-800: #8a1f1f;
+  --violet-50: #f4f1fe; --violet-200: #ddd3fb; --violet-300: #c3b3f6; --violet-700: #5b3fc4; --violet-800: #4a32a3;
+
+  --chart-grid: #e7ebe8;
+  --chart-axis: #6b7770;
+  --chart-actual: #56625b;
+  --chart-forecast: #15803d;
+}
+
+.dark {
+  --background: #0d0f0e;
+  --foreground: #e6ebe8;
+  --surface: #151917;
+  --surface-muted: #1b201d;
+  --border: #262d29;
+  --border-strong: #36403a;
+  --muted-foreground: #95a29b;
+  --primary: #1db954;
+  --primary-hover: #22c55e;
+  --primary-foreground: #04130a;
+  --primary-soft: rgb(29 185 84 / 0.12);
+  --success: #3ccb72;
+  --warning: #f2b54a;
+  --destructive: #ff6b63;
+  --info: #6ea2ff;
+  --sidebar-background: #0a0c0b;
+  --sidebar-foreground: #c7cfca;
+  --sidebar-muted: #7f8a84;
+  --sidebar-border: #1c221f;
+  --sidebar-hover: #151a17;
+  --sidebar-active: #18241d;
+  --ring: rgb(29 185 84 / 0.55);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 16px 40px -10px rgb(0 0 0 / 0.7);
+  --overlay: rgb(0 0 0 / 0.62);
+
+  --slate-50: #1a1f1c; --slate-100: #20262a; --slate-200: #2b332e; --slate-300: #4a5550; --slate-600: #93a099; --slate-700: #c4cdc8;
+  --blue-50: rgb(110 162 255 / 0.1); --blue-100: rgb(110 162 255 / 0.16); --blue-200: rgb(110 162 255 / 0.3); --blue-300: rgb(110 162 255 / 0.45); --blue-500: #6ea2ff; --blue-600: #5b93fb; --blue-700: #9cc0ff;
+  --emerald-50: rgb(60 203 114 / 0.11); --emerald-200: rgb(60 203 114 / 0.32); --emerald-300: rgb(60 203 114 / 0.48); --emerald-500: #3ccb72; --emerald-700: #5fdb8d; --emerald-800: #93e8b2;
+  --amber-50: rgb(242 181 74 / 0.1); --amber-100: rgb(242 181 74 / 0.17); --amber-200: rgb(242 181 74 / 0.3); --amber-300: rgb(242 181 74 / 0.48); --amber-400: #f2b54a; --amber-500: #f0a52a; --amber-700: #f2b54a; --amber-800: #f6c977; --amber-900: #f9dba3;
+  --red-50: rgb(255 107 99 / 0.1); --red-200: rgb(255 107 99 / 0.3); --red-300: rgb(255 107 99 / 0.48); --red-400: #ff8a83; --red-500: #ff5a52; --red-600: #e5484d; --red-700: #ff7d76; --red-800: #ffa49f;
+  --violet-50: rgb(167 139 250 / 0.12); --violet-200: rgb(167 139 250 / 0.3); --violet-300: rgb(167 139 250 / 0.48); --violet-700: #c4b5fd; --violet-800: #ddd6fe;
+
+  --chart-grid: #232a26;
+  --chart-axis: #8d9a93;
+  --chart-actual: #a7b3ac;
+  --chart-forecast: #1db954;
+}
+
+@theme inline {
+  --color-paper: var(--background);
+  --color-ink: var(--foreground);
+  --color-card: var(--surface);
+  --color-raised: var(--surface-muted);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-muted: var(--muted-foreground);
+  --color-accent: var(--primary);
+  --color-accent-strong: var(--primary-hover);
+  --color-accent-soft: var(--primary-soft);
+  --color-on-accent: var(--primary-foreground);
+  --color-success: var(--success);
+  --color-warn: var(--warning);
+  --color-danger: var(--destructive);
+  --color-info: var(--info);
+  --color-sidebar: var(--sidebar-background);
+  --color-sidebar-fg: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-line: var(--sidebar-border);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-overlay: var(--overlay);
+
+  --color-slate-50: var(--slate-50);
+  --color-slate-100: var(--slate-100);
+  --color-slate-200: var(--slate-200);
+  --color-slate-300: var(--slate-300);
+  --color-slate-600: var(--slate-600);
+  --color-slate-700: var(--slate-700);
+  --color-blue-50: var(--blue-50);
+  --color-blue-100: var(--blue-100);
+  --color-blue-200: var(--blue-200);
+  --color-blue-300: var(--blue-300);
+  --color-blue-500: var(--blue-500);
+  --color-blue-600: var(--blue-600);
+  --color-blue-700: var(--blue-700);
+  --color-emerald-50: var(--emerald-50);
+  --color-emerald-200: var(--emerald-200);
+  --color-emerald-300: var(--emerald-300);
+  --color-emerald-500: var(--emerald-500);
+  --color-emerald-700: var(--emerald-700);
+  --color-emerald-800: var(--emerald-800);
+  --color-amber-50: var(--amber-50);
+  --color-amber-100: var(--amber-100);
+  --color-amber-200: var(--amber-200);
+  --color-amber-300: var(--amber-300);
+  --color-amber-400: var(--amber-400);
+  --color-amber-500: var(--amber-500);
+  --color-amber-700: var(--amber-700);
+  --color-amber-800: var(--amber-800);
+  --color-amber-900: var(--amber-900);
+  --color-red-50: var(--red-50);
+  --color-red-200: var(--red-200);
+  --color-red-300: var(--red-300);
+  --color-red-400: var(--red-400);
+  --color-red-500: var(--red-500);
+  --color-red-600: var(--red-600);
+  --color-red-700: var(--red-700);
+  --color-red-800: var(--red-800);
+  --color-violet-50: var(--violet-50);
+  --color-violet-200: var(--violet-200);
+  --color-violet-300: var(--violet-300);
+  --color-violet-700: var(--violet-700);
+  --color-violet-800: var(--violet-800);
+
+  --shadow-card: var(--shadow);
+  --shadow-pop: var(--shadow-lg);
+}
+
 @theme {
-  --color-ink: #1d2433;
-  --color-paper: #f6f7f9;
-  --color-card: #ffffff;
-  --color-line: #e3e6eb;
-  --color-muted: #667085;
-  --color-accent: #2f55d4;
-  --color-accent-strong: #2443b0;
-  --color-warn: #b7791f;
-  --color-danger: #b42318;
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --animate-enter: enter 0.22s ease-out both;
+  --animate-fade: fade 0.15s ease-out both;
+  --animate-shimmer: shimmer 1.4s linear infinite;
+  --animate-toast: toast 0.2s ease-out both;
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: -200% 0;
+    }
+    to {
+      background-position: 200% 0;
+    }
+  }
+  @keyframes toast {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+:root {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
 }
 
 html,
 body {
-  background: var(--color-paper);
-  color: var(--color-ink);
+  background: var(--background);
+  color: var(--foreground);
 }
 
 body {
   font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
 }
 
+h1,
+h2,
+h3 {
+  letter-spacing: -0.011em;
+}
+
+::selection {
+  background: var(--primary-soft);
+}
+
 :focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
+  border-radius: 4px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.dark input[type="date"]::-webkit-calendar-picker-indicator,
+.dark input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-muted) 25%, var(--border) 50%, var(--surface-muted) 75%);
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+}
+
+/* Decorative background (dark surfaces only): the image is near-black in the centre with teal detail at the edges. */
+.brand-bg {
+  background: linear-gradient(rgb(10 12 11 / 0.4), rgb(10 12 11 / 0.4)), url("./assets/home-bg.webp") left center / cover no-repeat, var(--sidebar-background);
+}
+.dark .home-hero {
+  background: linear-gradient(90deg, rgb(13 15 14 / 0.6), rgb(13 15 14 / 0.15) 55%, transparent), url("./assets/home-bg.webp") center top / cover no-repeat, var(--surface);
+  border-color: var(--border-strong);
+}
+
+/* Theme switches should not animate every colour on the page. */
+.theme-switching,
+.theme-switching * {
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

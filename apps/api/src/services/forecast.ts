@@ -48,6 +48,11 @@ export function fitModels(): ModelRun {
   return run;
 }
 
+/** Sales or menu data changed: the next forecast refits on the new history (FR-028 also refits nightly). */
+export function invalidateForecast(): void {
+  db().run(`DELETE FROM forecast_model_runs`);
+}
+
 export function latestModelRun(): ModelRun | undefined {
   const row = db().get<{ summary_json: string }>(`SELECT summary_json FROM forecast_model_runs ORDER BY created_at DESC LIMIT 1`);
   return row ? json<ModelRun>(row.summary_json, undefined as never) : undefined;

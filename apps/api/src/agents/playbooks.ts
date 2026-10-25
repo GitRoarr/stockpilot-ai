@@ -63,7 +63,8 @@ export function nextDeterministic(run: RunInfo, history: Turn[]): Next {
       const toSend = pos.filter((po) => po.status === 'draft' && !po.minimumWarning && !has('send_purchase_order', (d) => d.args.poId === po.poId));
       if (toSend.length) return { calls: toSend.map((po) => ({ name: 'send_purchase_order', args: { poId: po.poId } })) };
       const total = plan.total?.toFixed?.(2);
-      return { text: `Drafted ${pos.length} order(s) for $${total} — $${plan.saving?.toFixed?.(2)} less than ordering from the preferred suppliers ($${plan.baselineTotal?.toFixed?.(2)}). Sending needs approval in the Inbox.`, calls: [] };
+      const missing = plan.notSourced?.length ? ` No supplier offer yet for: ${plan.notSourced.join(', ')} — add one in Inventory → Offers.` : '';
+      return { text: `Drafted ${pos.length} order(s) for $${total} — $${plan.saving?.toFixed?.(2)} less than ordering from the preferred suppliers ($${plan.baselineTotal?.toFixed?.(2)}). Sending needs approval in the Inbox.${missing}`, calls: [] };
     }
     case 'supplier_response': {
       if ((p.shortages?.length ?? 0) > 0) {

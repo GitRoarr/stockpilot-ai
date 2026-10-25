@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { config } from '../../config.js';
 import { withTimeout, type ChatRequest, type ChatResponse, type LlmClient, type StructuredRequest, type StructuredResponse, type Turn } from './types.js';
 
 // Gemini Interactions API adapter (default; Solution Design §D3.1). store:false — history is resent from our checkpoint,
@@ -34,6 +35,9 @@ export function fromInteractionSteps(steps: Step[] | undefined, outputText?: str
   return { text: text || undefined, calls, raw: out };
 }
 
+/** Agent steps are short tool choices that don't need deep reasoning (GEMINI_THINKING_LEVEL, default `low`). */
+const thinking = () => (config.GEMINI_THINKING_LEVEL === 'default' ? {} : { thinking_level: config.GEMINI_THINKING_LEVEL });
+
 export class InteractionsClient implements LlmClient {
   readonly style = 'interactions' as const;
   private ai: GoogleGenAI;
@@ -48,7 +52,7 @@ export class InteractionsClient implements LlmClient {
         input: toInteractionSteps(req.history),
         system_instruction: req.system,
         tools: req.tools.map((t) => ({ type: 'function', name: t.name, description: t.description, parameters: t.parameters })),
-        generation_config: { temperature: 0.2 },
+        generation_config: { temperature: 0.2, ...thinking() },
         store: false,
       }),
       req.timeoutMs,
@@ -64,7 +68,7 @@ export class InteractionsClient implements LlmClient {
         input: [{ type: 'user_input', content }],
         system_instruction: req.system,
         response_format: { type: 'text', mime_type: 'application/json', schema: req.schema },
-        generation_config: { temperature: 0.1 },
+        generation_config: { temperature: 0.1, ...thinking() },
         store: false,
       }),
       req.timeoutMs,

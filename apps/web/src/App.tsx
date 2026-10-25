@@ -8,18 +8,24 @@ import { useLive } from './hooks/useLive';
 import { LoginPage } from './pages/Login';
 import { OnboardingPage } from './pages/Onboarding';
 import { TodayPage } from './pages/Today';
-import { TeamPage } from './pages/Team';
-import { TasksPage, TaskDetailPage } from './pages/Tasks';
-import { InboxPage } from './pages/Inbox';
-import { OrdersPage, OrderDetailPage } from './pages/Orders';
-import { ReceivingPage, ReceivePage, InvoicePage } from './pages/Receiving';
-import { DisputesPage, DisputeDetailPage } from './pages/Disputes';
-import { InventoryPage } from './pages/Inventory';
-import { SavingsPage } from './pages/Savings';
-import { ActivityPage, RunDetailPage } from './pages/Activity';
-import { SettingsPage } from './pages/Settings';
 
-// Recharts is only needed on the Forecast page: load it on demand.
+// Pages other than Today load on demand, so the first screen downloads only what it needs (Recharts only on Forecast).
+const TeamPage = lazy(() => import('./pages/Team').then((m) => ({ default: m.TeamPage })));
+const TasksPage = lazy(() => import('./pages/Tasks').then((m) => ({ default: m.TasksPage })));
+const TaskDetailPage = lazy(() => import('./pages/Tasks').then((m) => ({ default: m.TaskDetailPage })));
+const InboxPage = lazy(() => import('./pages/Inbox').then((m) => ({ default: m.InboxPage })));
+const OrdersPage = lazy(() => import('./pages/Orders').then((m) => ({ default: m.OrdersPage })));
+const OrderDetailPage = lazy(() => import('./pages/Orders').then((m) => ({ default: m.OrderDetailPage })));
+const ReceivingPage = lazy(() => import('./pages/Receiving').then((m) => ({ default: m.ReceivingPage })));
+const ReceivePage = lazy(() => import('./pages/Receiving').then((m) => ({ default: m.ReceivePage })));
+const InvoicePage = lazy(() => import('./pages/Receiving').then((m) => ({ default: m.InvoicePage })));
+const DisputesPage = lazy(() => import('./pages/Disputes').then((m) => ({ default: m.DisputesPage })));
+const DisputeDetailPage = lazy(() => import('./pages/Disputes').then((m) => ({ default: m.DisputeDetailPage })));
+const InventoryPage = lazy(() => import('./pages/Inventory').then((m) => ({ default: m.InventoryPage })));
+const SavingsPage = lazy(() => import('./pages/Savings').then((m) => ({ default: m.SavingsPage })));
+const ActivityPage = lazy(() => import('./pages/Activity').then((m) => ({ default: m.ActivityPage })));
+const RunDetailPage = lazy(() => import('./pages/Activity').then((m) => ({ default: m.RunDetailPage })));
+const SettingsPage = lazy(() => import('./pages/Settings').then((m) => ({ default: m.SettingsPage })));
 const ForecastPage = lazy(() => import('./pages/Forecast').then((m) => ({ default: m.ForecastPage })));
 
 export function App() {
@@ -42,6 +48,7 @@ export function App() {
 
   return (
     <Layout me={me.data} connected={live.connected}>
+      <Suspense fallback={<Loading rows={4} />}>
       <Routes>
         <Route path="/" element={<TodayPage me={me.data} />} />
         <Route path="/team" element={<TeamPage me={me.data} />} />
@@ -55,7 +62,7 @@ export function App() {
         <Route path="/receiving/invoices/:id" element={<InvoicePage me={me.data} />} />
         <Route path="/disputes" element={<DisputesPage />} />
         <Route path="/disputes/:id" element={<DisputeDetailPage me={me.data} />} />
-        <Route path="/forecast" element={<Suspense fallback={<Loading />}><ForecastPage me={me.data} /></Suspense>} />
+        <Route path="/forecast" element={<ForecastPage me={me.data} />} />
         <Route path="/inventory" element={<InventoryPage me={me.data} />} />
         <Route path="/savings" element={<SavingsPage />} />
         <Route path="/activity" element={<ActivityPage />} />
@@ -63,6 +70,7 @@ export function App() {
         <Route path="/settings" element={<SettingsPage me={me.data} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </Layout>
   );
 }

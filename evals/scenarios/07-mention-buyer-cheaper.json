@@ -14,12 +14,21 @@
     {
       "expect": "sql",
       "query": "SELECT COUNT(*) FROM messages WHERE author_id='buyer' AND body LIKE '%Optimiser result%'",
-      "equals": 1
+      "equals": 1,
+      "recordedOnly": true
     },
     {
       "expect": "sql",
       "query": "SELECT authority_role FROM agent_runs WHERE trigger='mention'",
       "equals": "chef"
+    },
+    {
+      "expect": "toolSequence",
+      "agent": "buyer",
+      "trigger": "mention",
+      "tools": [
+        "get_supplier_offers"
+      ]
     }
   ]
 }

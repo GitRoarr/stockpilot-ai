@@ -3,58 +3,139 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, patch, post } from '../api/client';
 import { Thread } from '../components/Thread';
-import { agentName, Badge, Button, Card, dt, ErrorCard, Field, inputCls, Json, Modal, Q, Status } from '../components/ui';
+import { ListChecks, Plus } from 'lucide-react';
+import { useToast } from '../components/toast';
+import { agentName, Badge, Button, Card, cx, dt, Empty, ErrorCard, Field, inputCls, Json, Modal, PageHeader, Q, SearchInput, Status, Table, Tabs } from '../components/ui';
 
 // Shared task board (FR-113 – FR-115): humans and agents; assigning to an agent starts a run.
 const COLS = ['todo', 'in_progress', 'waiting', 'blocked', 'done'] as const;
 
 function assignee(t: any) {
   if (t.assignee_type === 'agent') return <Badge tone="blue">{agentName(t.assignee_id)}</Badge>;
-  if (t.assignee_type === 'user') return <Badge>human</Badge>;
+  if (t.assignee_type === 'user') return <Badge>person</Badge>;
   return <Badge>unassigned</Badge>;
 }
+
+const VIEWS = [
+  ['board', 'Board'],
+  ['list', 'List'],
+] as const;
+const WHO = [
+  ['all', 'Everyone'],
+  ['agents', 'AI agents'],
+  ['humans', 'People'],
+  ['pilot', 'Pilot'],
+  ['demand-planner', 'Demand Planner'],
+  ['buyer', 'Buyer'],
+  ['ap-clerk', 'AP Clerk'],
+] as const;
 
 export function TasksPage() {
   const q = useQuery({ queryKey: ['tasks'], queryFn: () => api<any[]>('/tasks') });
   const [create, setCreate] = useState(false);
+  const [view, setView] = useState<'board' | 'list'>('board');
+  const [who, setWho] = useState<(typeof WHO)[number][0]>('all');
+  const [search, setSearch] = useState('');
+  const [showDone, setShowDone] = useState(true);
+  const keep = (t: any) =>
+    (who === 'all' || (who === 'agents' ? t.assignee_type === 'agent' : who === 'humans' ? t.assignee_type !== 'agent' : t.assignee_id === who)) &&
+    (!search || t.title.toLowerCase().includes(search.toLowerCase())) &&
+    (showDone || t.status !== 'done');
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-semibold">Tasks</h1>
-        <Button variant="primary" className="ml-auto" onClick={() => setCreate(true)}>
-          New task
-        </Button>
+      <PageHeader
+        title="Tasks"
+        description="Shared work between people and agents. Assigning a task to an agent starts a run."
+        actions={
+          <Button variant="primary" icon={Plus} onClick={() => setCreate(true)}>
+            New task
+          </Button>
+        }
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Tabs label="View" value={view} onChange={setView} options={VIEWS} />
+        <select aria-label="Assignee" className={cx(inputCls.replace('w-full ', ''), 'w-auto')} value={who} onChange={(e) => setWho(e.target.value as 'all')}>
+          {WHO.map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </select>
+        <label className="flex items-center gap-1.5 text-sm text-muted">
+          <input type="checkbox" className="accent-[var(--primary)]" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> Show done
+        </label>
+        <SearchInput className="ml-auto w-full sm:w-56" value={search} onChange={setSearch} placeholder="Search tasks…" label="Search tasks" />
       </div>
       <Q q={q}>
-        {(tasks) => (
-          <div className="grid gap-3 md:grid-cols-5">
-            {COLS.map((c) => {
-              const items = tasks.filter((t) => t.status === c).slice(0, 40);
-              return (
-                <div key={c} className="rounded-xl border border-line bg-slate-50/60 p-2">
-                  <div className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wider text-muted">
-                    {c.replace('_', ' ')} <span className="ml-auto">{tasks.filter((t) => t.status === c).length}</span>
-                  </div>
-                  <ul className="space-y-2">
-                    {items.map((t) => (
-                      <li key={t.id}>
-                        <Link to={`/tasks/${t.id}`} className="block rounded-lg border border-line bg-card p-2 text-sm hover:border-accent">
-                          <div className="line-clamp-2 font-medium">{t.title}</div>
-                          <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-muted">
-                            {assignee(t)}
-                            {t.parent_id && <Badge tone="violet">delegated</Badge>}
-                            <span className="ml-auto">{dt(t.updated_at)}</span>
-                          </div>
-                        </Link>
-                      </li>
+        {(all) => {
+          const tasks = all.filter(keep);
+          if (!all.length)
+            return (
+              <Empty icon={ListChecks} title="No tasks yet" action={<Button variant="primary" icon={Plus} onClick={() => setCreate(true)}>New task</Button>}>
+                Tasks appear when the morning plan runs, when agents delegate work, or when you create one.
+              </Empty>
+            );
+          if (view === 'list')
+            return (
+              <Card pad={false}>
+                {tasks.length ? (
+                  <Table head={['Task', 'Assignee', 'Status', 'Due', 'Updated']}>
+                    {tasks.map((t) => (
+                      <tr key={t.id}>
+                        <td className="px-3 py-2">
+                          <Link className="font-medium hover:underline" to={`/tasks/${t.id}`}>
+                            {t.title}
+                          </Link>
+                          {t.parent_id && (
+                            <span className="ml-1.5">
+                              <Badge tone="violet">delegated</Badge>
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">{assignee(t)}</td>
+                        <td className="px-3 py-2">
+                          <Status s={t.status} />
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-xs">{t.due_at ? dt(t.due_at) : <span className="text-muted">—</span>}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-xs text-muted">{dt(t.updated_at)}</td>
+                      </tr>
                     ))}
-                    {!items.length && <li className="px-1 text-xs text-muted">—</li>}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                  </Table>
+                ) : (
+                  <p className="p-4 text-sm text-muted">No tasks match these filters.</p>
+                )}
+              </Card>
+            );
+          return (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              {COLS.filter((c) => showDone || c !== 'done').map((c) => {
+                const col = tasks.filter((t) => t.status === c);
+                return (
+                  <section key={c} aria-label={c.replace('_', ' ')} className="min-w-0 rounded-lg border border-line bg-raised p-2">
+                    <div className="mb-2 flex items-center gap-2 px-1 text-xs font-medium capitalize text-muted">
+                      <Status s={c} /> <span className="ml-auto tabular-nums">{col.length}</span>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {col.slice(0, 40).map((t) => (
+                        <li key={t.id}>
+                          <Link to={`/tasks/${t.id}`} className="block rounded-md border border-line bg-card p-2.5 text-sm shadow-card transition-colors hover:border-line-strong">
+                            <div className="line-clamp-2 font-medium">{t.title}</div>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-muted">
+                              {assignee(t)}
+                              {t.parent_id && <Badge tone="violet">delegated</Badge>}
+                              <span className="ml-auto">{t.due_at ? `due ${dt(t.due_at)}` : dt(t.updated_at)}</span>
+                            </div>
+                          </Link>
+                        </li>
+                      ))}
+                      {!col.length && <li className="px-1 py-2 text-xs text-muted">No tasks</li>}
+                    </ul>
+                  </section>
+                );
+              })}
+            </div>
+          );
+        }}
       </Q>
       {create && <NewTask onClose={() => setCreate(false)} />}
     </div>
@@ -63,6 +144,7 @@ export function TasksPage() {
 
 function NewTask({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
+  const toast = useToast();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [who, setWho] = useState('agent:buyer');
@@ -73,6 +155,7 @@ function NewTask({ onClose }: { onClose: () => void }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tasks'] });
+      toast('success', 'Task created', who.startsWith('agent:') ? `${agentName(who.split(':')[1])} starts working on it.` : undefined);
       onClose();
     },
   });
@@ -87,7 +170,7 @@ function NewTask({ onClose }: { onClose: () => void }) {
           <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} minLength={3} required />
         </Field>
         <Field label="Details">
-          <textarea className={inputCls} rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <textarea className={cx(inputCls, "h-auto py-2")} rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
         <Field label="Assign to" hint="Assigning to an agent starts a run with your role as the authority ceiling">
           <select className={inputCls} value={who} onChange={(e) => setWho(e.target.value)}>
@@ -117,9 +200,11 @@ export function TaskDetailPage() {
   return (
     <Q q={q}>
       {(t) => (
-        <div className="grid gap-5 lg:grid-cols-3">
-          <div className="space-y-4 lg:col-span-2">
-            <Card title={t.title} actions={<Status s={t.status} />}>
+        <div className="space-y-4">
+        <PageHeader crumbs={[{ label: 'Tasks', to: '/tasks' }, { label: t.title }]} title={t.title} description={`Created ${dt(t.created_at)} · updated ${dt(t.updated_at)}${t.due_at ? ` · due ${dt(t.due_at)}` : ''}`} actions={<Status s={t.status} />} />
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="min-w-0 space-y-4 lg:col-span-2">
+            <Card title="Details">
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 {assignee(t)} {t.parent_id && <Link className="text-accent" to={`/tasks/${t.parent_id}`}>Parent task</Link>}
                 {t.linked_type === 'purchase_order' && <Link className="text-accent" to={`/orders/${t.linked_id}`}>Linked PO</Link>}
@@ -130,13 +215,21 @@ export function TaskDetailPage() {
               {t.description && <p className="mt-2 text-sm">{t.description}</p>}
               {t.result && (
                 <div className="mt-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Result</div>
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted">Result</div>
                   <p className="text-sm">{t.result.message ?? ''}</p>
                 </div>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
-                {t.status !== 'done' && <Button onClick={() => upd.mutate('done')}>Mark done</Button>}
-                {t.status !== 'cancelled' && t.status !== 'done' && <Button variant="danger" onClick={() => upd.mutate('cancelled')}>Cancel</Button>}
+                {t.status !== 'done' && (
+                  <Button variant="primary" busy={upd.isPending && upd.variables === 'done'} onClick={() => upd.mutate('done')}>
+                    Mark done
+                  </Button>
+                )}
+                {t.status !== 'cancelled' && t.status !== 'done' && (
+                  <Button variant="danger" busy={upd.isPending && upd.variables === 'cancelled'} onClick={() => upd.mutate('cancelled')}>
+                    Cancel task
+                  </Button>
+                )}
               </div>
             </Card>
             <Card title="Thread">
@@ -176,6 +269,7 @@ export function TaskDetailPage() {
               </Card>
             )}
           </div>
+        </div>
         </div>
       )}
     </Q>

@@ -3,11 +3,12 @@ import { z } from 'zod';
 import { db } from '../db/sqlite.js';
 import { requireRole, requireUser } from '../auth/sessions.js';
 import { audit, publish } from '../lib/events.js';
-import { conflict, id, localDate, notFound, nowIso, unprocessable } from '../lib/util.js';
-import { getForecast } from '../services/forecast.js';
+import { addDays, conflict, id, localDate, notFound, nowIso, unprocessable } from '../lib/util.js';
+import { getForecast, invalidateForecast } from '../services/forecast.js';
 import { recordMovement } from '../services/inventory.js';
 import { computeNeeds, createPlan, getPlan } from '../services/planning.js';
 import { batches } from '../services/inventory.js';
+import { ImportBody, importInventory, importSales, inventoryCsv, inventoryTemplateCsv, salesTemplateCsv } from '../services/csvImport.js';
 
 // Master data, stock, forecast and plans (SRS FR-003 – FR-010, FR-020 – FR-045).
 const IngredientBody = z.object({
@@ -19,6 +20,7 @@ const IngredientBody = z.object({
   safetyDays: z.number().min(0).max(7),
   serviceLevel: z.union([z.literal(0.9), z.literal(0.95), z.literal(0.98)]),
   maxOverbuyDays: z.number().min(0).max(60).default(3),
+  reorderLevel: z.number().min(0).max(100000).nullable().optional(),
 });
 
 const SupplierBody = z.object({
@@ -70,6 +72,7 @@ export async function inventoryRoutes(app: FastifyInstance): Promise<void> {
           safetyDays: r.safety_days,
           serviceLevel: r.service_level,
           maxOverbuyDays: r.max_overbuy_days,
+          reorderLevel: r.reorder_level,
           active: Boolean(r.active),
           onHand: n?.onHand ?? 0,
           usable: n?.trace.usable ?? 0,
@@ -91,7 +94,7 @@ export async function inventoryRoutes(app: FastifyInstance): Promise<void> {
     uniqueName(b.name);
     const iid = id('ing');
     db().run(
-      `INSERT INTO ingredients (id, name, unit, category, perishable, shelf_life_days, safety_days, service_level, max_overbuy_days) VALUES (?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO ingredients (id, name, unit, category, perishable, shelf_life_days, safety_days, service_level, max_overbuy_days, reorder_level) VALUES (?,?,?,?,?,?,?,?,?,?)`,
       iid,
       b.name,
       b.unit,
@@ -101,6 +104,7 @@ export async function inventoryRoutes(app: FastifyInstance): Promise<void> {
       b.safetyDays,
       b.serviceLevel,
       b.maxOverbuyDays,
+      b.reorderLevel ?? null,
     );
     audit({ type: 'user', id: u.id }, 'ingredient.created', 'ingredient', iid, { after: b });
     return { id: iid };
@@ -112,7 +116,7 @@ export async function inventoryRoutes(app: FastifyInstance): Promise<void> {
     if (!before) throw notFound('Ingredient not found');
     const b = IngredientBody.partial().extend({ active: z.boolean().optional() }).parse(req.body);
     if (b.name) uniqueName(b.name, iid);
-    const map: Record<string, string> = { name: 'name', category: 'category', unit: 'unit', perishable: 'perishable', shelfLifeDays: 'shelf_life_days', safetyDays: 'safety_days', serviceLevel: 'service_level', maxOverbuyDays: 'max_overbuy_days', active: 'active' };
+    const map: Record<string, string> = { name: 'name', category: 'category', unit: 'unit', perishable: 'perishable', shelfLifeDays: 'shelf_life_days', safetyDays: 'safety_days', serviceLevel: 'service_level', maxOverbuyDays: 'max_overbuy_days', reorderLevel: 'reorder_level', active: 'active' };
     const keys = Object.keys(b).filter((k) => (b as any)[k] !== undefined);
     if (keys.length) db().run(`UPDATE ingredients SET ${keys.map((k) => `${map[k]} = ?`).join(', ')} WHERE id = ?`, ...keys.map((k) => (b as any)[k]), iid);
     audit({ type: 'user', id: u.id }, b.active === false ? 'ingredient.deactivated' : 'ingredient.updated', 'ingredient', iid, { before, after: b });
@@ -126,11 +130,35 @@ export async function inventoryRoutes(app: FastifyInstance): Promise<void> {
       .discriminatedUnion('type', [
         z.object({ type: z.literal('receive'), qty: z.number().positive().max(100000), expiresAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), reason: z.string().max(200).optional() }),
         z.object({ type: z.literal('waste'), qty: z.number().positive().max(100000), reason: z.string().min(2).max(200) }),
-        z.object({ type: z.literal('count_adjust'), countedQty: z.number().min(0).max(100000), reason: z.string().max(200).optional() }),
+        z.object({ type: z.literal('count_adjust'), countedQty: z.number().min(0).max(100000), expiresAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), reason: z.string().max(200).optional() }),
         z.object({ type: z.literal('write_off'), reason: z.string().max(200).optional() }),
       ])
       .parse(req.body);
     return recordMovement((req.params as { id: string }).id, b, { type: 'user', id: u.id });
+  });
+  // CSV import/export (FR-009 sales; inventory import/export). dryRun defaults to true: preview first, then confirm.
+  const csvReply = (reply: any, name: string, body: string) => reply.type('text/csv; charset=utf-8').header('content-disposition', `attachment; filename="${name}"`).send(body);
+  app.get('/inventory/export.csv', async (req, reply) => {
+    requireUser(req);
+    return csvReply(reply, `stockpilot-inventory-${localDate()}.csv`, inventoryCsv());
+  });
+  app.get('/imports/inventory/template.csv', async (req, reply) => {
+    requireUser(req);
+    return csvReply(reply, 'stockpilot-inventory-template.csv', inventoryTemplateCsv());
+  });
+  app.get('/imports/sales/template.csv', async (req, reply) => {
+    requireUser(req);
+    return csvReply(reply, 'stockpilot-sales-template.csv', salesTemplateCsv());
+  });
+  app.post('/imports/inventory', async (req) => {
+    const u = requireRole(req, 'owner', 'chef');
+    const b = ImportBody.parse(req.body);
+    return importInventory(b.csv, b.dryRun, { type: 'user', id: u.id });
+  });
+  app.post('/imports/sales', async (req) => {
+    const u = requireRole(req, 'owner', 'chef');
+    const b = ImportBody.parse(req.body);
+    return importSales(b.csv, b.dryRun, { type: 'user', id: u.id });
   });
   app.get('/stock-movements', async () => db().all(`SELECT m.*, i.name AS ingredient, i.unit FROM stock_movements m JOIN ingredients i ON i.id = m.ingredient_id ORDER BY m.created_at DESC LIMIT 200`));
 
@@ -223,6 +251,79 @@ export async function inventoryRoutes(app: FastifyInstance): Promise<void> {
         return { ...m, recipe: lines, plateCost: cost, foodCostPct: m.price ? Math.round((cost / m.price) * 1000) / 10 : null };
       }),
   );
+  // Daily sales sheet (FR-008): one date, quantities per dish; upserts. Only completed days (the forecast learns from them).
+  app.post('/sales', async (req) => {
+    const u = requireRole(req, 'owner', 'chef');
+    const today = localDate();
+    const b = z
+      .object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        lines: z.array(z.object({ menuItemId: z.string(), qty: z.number().int().min(0).max(10000) })).min(1).max(100),
+      })
+      .parse(req.body);
+    if (b.date >= today) throw unprocessable('Enter sales for completed days only (before today)');
+    if (b.date < addDays(today, -365)) throw unprocessable('Sales older than one year are not used');
+    const known = new Set(db().all<{ id: string }>(`SELECT id FROM menu_items`).map((m) => m.id));
+    const unknown = b.lines.filter((l) => !known.has(l.menuItemId));
+    if (unknown.length) throw unprocessable(`Unknown menu item: ${unknown.map((l) => l.menuItemId).join(', ')}`);
+    const before = db().all<{ menu_item_id: string; qty: number }>(`SELECT menu_item_id, qty FROM sales_records WHERE date = ?`, b.date);
+    db().tx(() => {
+      for (const l of b.lines) db().run(`INSERT INTO sales_records (date, menu_item_id, qty) VALUES (?,?,?) ON CONFLICT(date, menu_item_id) DO UPDATE SET qty = excluded.qty`, b.date, l.menuItemId, l.qty);
+      invalidateForecast();
+    });
+    audit({ type: 'user', id: u.id }, 'sales.recorded', 'sales', b.date, { before, after: b.lines });
+    publish('forecast.updated', { date: b.date });
+    return { date: b.date, saved: b.lines.length };
+  });
+
+  const MenuBody = z.object({
+    name: z.string().trim().min(1).max(80),
+    price: z.number().min(0).max(1000),
+    targetFoodCostPct: z.number().min(0.05).max(0.9).default(0.3),
+    active: z.boolean().default(true),
+    recipe: z.array(z.object({ ingredientId: z.string(), qty: z.number().positive().max(1000) })).min(1).max(40),
+  });
+  const saveRecipe = (menuItemId: string, recipe: { ingredientId: string; qty: number }[]) => {
+    const ids = new Set(db().all<{ id: string }>(`SELECT id FROM ingredients WHERE active = 1`).map((i) => i.id));
+    const bad = recipe.filter((r) => !ids.has(r.ingredientId));
+    if (bad.length) throw unprocessable(`Unknown or inactive ingredient: ${bad.map((r) => r.ingredientId).join(', ')}`);
+    if (new Set(recipe.map((r) => r.ingredientId)).size !== recipe.length) throw unprocessable('Each ingredient can appear once per recipe');
+    db().run(`DELETE FROM recipe_lines WHERE menu_item_id = ?`, menuItemId);
+    for (const r of recipe) db().run(`INSERT INTO recipe_lines (menu_item_id, ingredient_id, qty) VALUES (?,?,?)`, menuItemId, r.ingredientId, r.qty);
+  };
+  app.post('/menu-items', async (req) => {
+    const u = requireRole(req, 'owner', 'chef');
+    const b = MenuBody.parse(req.body);
+    if (db().get(`SELECT 1 FROM menu_items WHERE name = ? COLLATE NOCASE`, b.name)) throw conflict(`A dish named "${b.name}" already exists`);
+    const mid = id('mi');
+    db().tx(() => {
+      db().run(`INSERT INTO menu_items (id, name, price, target_food_cost_pct, active) VALUES (?,?,?,?,?)`, mid, b.name, b.price, b.targetFoodCostPct, b.active);
+      saveRecipe(mid, b.recipe);
+      invalidateForecast();
+    });
+    audit({ type: 'user', id: u.id }, 'menu_item.created', 'menu_item', mid, { after: b });
+    publish('forecast.updated', {});
+    return { id: mid };
+  });
+  app.patch('/menu-items/:id', async (req) => {
+    const u = requireRole(req, 'owner', 'chef');
+    const { id: mid } = req.params as { id: string };
+    const before = db().get<any>(`SELECT * FROM menu_items WHERE id = ?`, mid);
+    if (!before) throw notFound('Menu item not found');
+    const b = MenuBody.partial().parse(req.body);
+    if (b.name && db().get(`SELECT 1 FROM menu_items WHERE name = ? COLLATE NOCASE AND id <> ?`, b.name, mid)) throw conflict(`A dish named "${b.name}" already exists`);
+    db().tx(() => {
+      const map: Record<string, string> = { name: 'name', price: 'price', targetFoodCostPct: 'target_food_cost_pct', active: 'active' };
+      const keys = Object.keys(map).filter((k) => (b as any)[k] !== undefined);
+      if (keys.length) db().run(`UPDATE menu_items SET ${keys.map((k) => `${map[k]} = ?`).join(', ')} WHERE id = ?`, ...keys.map((k) => (b as any)[k]), mid);
+      if (b.recipe) saveRecipe(mid, b.recipe);
+      invalidateForecast();
+    });
+    audit({ type: 'user', id: u.id }, 'menu_item.updated', 'menu_item', mid, { before, after: b });
+    publish('forecast.updated', {});
+    return { ok: true };
+  });
+
   app.get('/sales', async (req) => {
     const q = z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
     return db().all(`SELECT s.date, s.menu_item_id, m.name, s.qty FROM sales_records s JOIN menu_items m ON m.id = s.menu_item_id WHERE s.date BETWEEN ? AND ? ORDER BY s.date, m.name`, q.from, q.to);

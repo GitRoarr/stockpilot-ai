@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, post } from '../api/client';
-import { agentName, Badge, Button, Card, Collapse, cx, dt, Empty, ErrorCard, inputCls, Json, Q, Status, Table } from '../components/ui';
+import { agentName, Badge, Button, Card, Collapse, cx, dt, Empty, ErrorCard, inputCls, Json, PageHeader, Q, Status, Table, Tabs } from '../components/ui';
 
 // Agent activity (FR-060), audit timeline (FR-099) and outbox (FR-090).
 const TABS = ['runs', 'audit', 'outbox'] as const;
@@ -12,16 +12,7 @@ export function ActivityPage() {
   const tab = (params.get('tab') ?? 'runs') as (typeof TABS)[number];
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">Activity</h1>
-        <div className="ml-auto flex gap-1 rounded-lg border border-line bg-card p-1 text-sm">
-          {TABS.map((t) => (
-            <button key={t} onClick={() => setParams({ tab: t })} className={cx('rounded-md px-3 py-1 capitalize', tab === t ? 'bg-blue-50 font-semibold text-accent' : 'text-slate-600')}>
-              {t === 'runs' ? 'Agent runs' : t}
-            </button>
-          ))}
-        </div>
-      </div>
+      <PageHeader title="Activity" description="Every agent run step by step, the audit trail of business actions, and outgoing email." actions={<Tabs label="Activity view" value={tab} onChange={(t) => setParams({ tab: t })} options={[['runs', 'Agent runs'], ['audit', 'Audit'], ['outbox', 'Outbox']] as const} />} />
       {tab === 'runs' && <Runs />}
       {tab === 'audit' && <Audit />}
       {tab === 'outbox' && <Outbox />}
@@ -41,7 +32,7 @@ function Runs() {
           return (
             <Table head={['Started', 'Agent', 'Trigger', 'Goal', 'Mode', 'Steps', 'Status']}>
               {list.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50">
+                <tr key={r.id}>
                   <td className="px-3 py-2 text-xs">
                     <Link className="text-accent" to={`/activity/runs/${r.id}`}>
                       {dt(r.started_at)}

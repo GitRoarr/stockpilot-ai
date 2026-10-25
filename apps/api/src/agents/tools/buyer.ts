@@ -124,6 +124,7 @@ export const optimizeOrder: ToolDef<z.infer<typeof optimizeSchema>> = {
       lines: plan.solution.lines.slice(0, 25).map((l) => ({ ingredientId: l.ingredientId, supplier: supName.get(l.supplierId), sku: l.sku, packs: l.packs, qty: l.qty, lineTotal: l.lineTotal, why: plan.explanations[l.ingredientId] })),
       summary: plan.explanations._summary,
       excludedByAgreements: plan.excludedByAgreements.length,
+      notSourced: plan.unsourced.map((u) => `${u.name} (${u.need})`),
     };
   },
 };

@@ -1,54 +1,78 @@
 import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowRight, Ban, Check, ChevronRight, ClipboardList, Download, ExternalLink, History, Mail, Printer, Send, Truck } from 'lucide-react';
 import { api, patch, post } from '../api/client';
 import type { Me } from '../components/Layout';
 import { Thread } from '../components/Thread';
-import { Badge, Button, Card, cx, dt, Empty, ErrorCard, inputCls, Modal, num, Q, Status, Table, usd } from '../components/ui';
+import { useToast } from '../components/toast';
+import { Badge, Button, Card, ConfirmDialog, cx, dt, Empty, ErrorCard, inputCls, Modal, num, PageHeader, Q, SearchInput, Status, Table, Tabs, usd } from '../components/ui';
 
-const FILTERS = ['open', 'draft', 'pending_approval', 'approved', 'sent', 'partially_confirmed', 'confirmed', 'received', 'closed', 'cancelled'];
+const FILTERS = [
+  ['open', 'Open'],
+  ['pending_approval', 'Pending approval'],
+  ['sent', 'Sent'],
+  ['partially_confirmed', 'Partial'],
+  ['confirmed', 'Confirmed'],
+  ['received', 'Received'],
+  ['closed', 'Closed'],
+  ['cancelled', 'Cancelled'],
+  ['all', 'All'],
+] as const;
+type Filter = (typeof FILTERS)[number][0];
 const OPEN = new Set(['draft', 'pending_approval', 'approved', 'sent', 'partially_confirmed', 'confirmed', 'partially_received']);
+const inFilter = (f: Filter, s: string) => (f === 'all' ? true : f === 'open' ? OPEN.has(s) : f === 'received' ? s === 'received' || s === 'partially_received' : s === f);
 
 export function OrdersPage() {
   const [params, setParams] = useSearchParams();
-  const filter = params.get('status') ?? 'open';
+  const filter = ((params.get('status') as Filter) ?? 'open') as Filter;
+  const [search, setSearch] = useState('');
   const q = useQuery({ queryKey: ['orders'], queryFn: () => api<any[]>('/purchase-orders') });
+  const counts = q.data && (Object.fromEntries(FILTERS.map(([f]) => [f, q.data!.filter((r) => inFilter(f, r.status)).length])) as Record<Filter, number>);
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Purchase orders</h1>
-      <div className="flex flex-wrap gap-1">
-        {FILTERS.map((f) => (
-          <button key={f} onClick={() => setParams({ status: f })} className={cx('rounded-full border px-3 py-1 text-xs', f === filter ? 'border-accent bg-blue-50 text-accent' : 'border-line bg-card')}>
-            {f.replace(/_/g, ' ')}
-          </button>
-        ))}
+      <PageHeader title="Purchase orders" description="Orders drafted by the Buyer from the optimiser plan, from approval to delivery." />
+      <div className="flex flex-wrap items-center gap-2">
+        <Tabs label="Order status" value={filter} onChange={(f) => setParams({ status: f })} options={FILTERS} counts={counts} />
+        <SearchInput className="ml-auto w-full sm:w-56" value={search} onChange={setSearch} placeholder="Search PO or supplier…" label="Search orders" />
       </div>
       <Card pad={false}>
         <Q q={q}>
           {(rows) => {
-            const list = rows.filter((r) => (filter === 'open' ? OPEN.has(r.status) : r.status === filter));
-            if (!list.length) return <div className="p-4"><Empty>No purchase orders here. The Buyer drafts them during the morning run.</Empty></div>;
+            const list = rows.filter((r) => inFilter(filter, r.status) && (!search || `${r.number} ${r.supplier}`.toLowerCase().includes(search.toLowerCase())));
+            if (!list.length)
+              return (
+                <div className="p-4">
+                  <Empty icon={ClipboardList} title="No purchase orders here">
+                    {search ? 'No order matches your search.' : 'The Buyer drafts orders during the morning plan; they appear here for approval.'}
+                  </Empty>
+                </div>
+              );
             return (
-              <Table head={['PO', 'Supplier', 'Lines', 'Total', 'Saving', 'Delivery', 'Status', '']}>
+              <Table head={['Order', 'Supplier', 'Items', 'Total', 'Saving', 'Delivery', 'Status', '']} align={['left', 'left', 'right', 'right', 'right', 'left', 'left', 'right']}>
                 {list.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <td className="px-3 py-2 font-mono">
-                      <Link className="text-accent" to={`/orders/${r.id}`}>
+                  <tr key={r.id}>
+                    <td className="whitespace-nowrap px-3 py-2">
+                      <Link className="font-mono font-medium text-accent hover:underline" to={`/orders/${r.id}`}>
                         {r.number}
                       </Link>
-                      {r.parent_po_id && <Badge tone="violet">supplementary</Badge>}
+                      {r.parent_po_id && (
+                        <span className="ml-1.5">
+                          <Badge tone="violet">follow-up</Badge>
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2">{r.supplier}</td>
-                    <td className="px-3 py-2 font-mono">{r.lineCount}</td>
-                    <td className="px-3 py-2 font-mono">{usd(r.total)}</td>
-                    <td className="px-3 py-2 font-mono text-emerald-700">{r.saving > 0 ? usd(r.saving) : '—'}</td>
-                    <td className="px-3 py-2">{r.delivery_date}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">{r.lineCount}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">{usd(r.total)}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-emerald-700">{r.saving > 0 ? usd(r.saving) : '—'}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{r.delivery_date ?? '—'}</td>
                     <td className="px-3 py-2">
                       <Status s={r.status} />
                     </td>
                     <td className="px-3 py-2 text-right">
-                      <Link className="text-xs text-accent" to={`/orders/${r.id}`}>
-                        Open →
+                      <Link aria-label={`Open ${r.number}`} className="inline-grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-raised hover:text-ink" to={`/orders/${r.id}`}>
+                        <ChevronRight aria-hidden className="h-4 w-4" />
                       </Link>
                     </td>
                   </tr>
@@ -62,16 +86,30 @@ export function OrdersPage() {
   );
 }
 
+const linkBtn = 'inline-flex h-8 items-center gap-1.5 rounded-md border border-line-strong bg-card px-3 text-sm font-medium shadow-card hover:bg-raised';
+
 export function OrderDetailPage({ me }: { me: Me }) {
   const { id = '' } = useParams();
   const qc = useQueryClient();
+  const toast = useToast();
   const q = useQuery({ queryKey: ['order', id], queryFn: () => api<any>(`/purchase-orders/${id}`) });
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['order', id] });
+    qc.invalidateQueries({ queryKey: ['orders'] });
     qc.invalidateQueries({ queryKey: ['inbox'] });
+    qc.invalidateQueries({ queryKey: ['dashboard'] });
   };
-  const act = useMutation({ mutationFn: (a: 'approve' | 'send' | 'cancel') => post(`/purchase-orders/${id}/${a}`), onSuccess: refresh });
+  const act = useMutation({
+    mutationFn: (a: 'approve' | 'cancel') => post(`/purchase-orders/${id}/${a}`),
+    onSuccess: (_r, a) => {
+      refresh();
+      setCancel(false);
+      toast(a === 'approve' ? 'success' : 'info', a === 'approve' ? 'Order approved' : 'Order cancelled');
+    },
+    onError: (e) => toast('error', 'Action failed', (e as Error).message),
+  });
   const [send, setSend] = useState(false);
+  const [cancel, setCancel] = useState(false);
   const canEdit = me.user.role !== 'staff';
   return (
     <Q q={q}>
@@ -79,137 +117,181 @@ export function OrderDetailPage({ me }: { me: Me }) {
         const draft = po.status === 'draft';
         const portal = po.emails.map((e: any) => e.text?.match(/https?:\/\/\S+\/s\/[A-Za-z0-9_-]+/)?.[0]).filter(Boolean).pop();
         const limitBlocked = me.user.role === 'chef' && po.requiredRole === 'owner';
+        const decidable = ['draft', 'pending_approval'].includes(po.status) && canEdit;
+        const sendable = ['draft', 'pending_approval', 'approved'].includes(po.status) && canEdit;
         return (
-          <div className="grid gap-5 lg:grid-cols-3">
-            <div className="space-y-4 lg:col-span-2">
-              <Card
-                title={
-                  <span className="flex items-center gap-2">
-                    <span className="font-mono">{po.number}</span> {po.supplier.name}
-                  </span>
-                }
-                subtitle={`Delivery ${po.delivery_date ?? '—'}${po.eta ? ` · ETA ${po.eta}` : ''}`}
-                actions={<Status s={po.status} />}
-              >
-                {po.min_order_warning && <div className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{po.min_order_warning}</div>}
-                <Table head={['Item', 'SKU', 'Need', 'Packs', 'Qty', 'Price', 'Line', 'Supplier said']}>
-                  {po.lines.map((l: any) => (
-                    <Line key={l.id} po={po} l={l} editable={draft && canEdit} onSaved={refresh} />
-                  ))}
-                </Table>
-                <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
-                  <span>
-                    Subtotal <b className="font-mono">{usd(po.subtotal)}</b>
-                  </span>
-                  <span>
-                    Fees <b className="font-mono">{usd(po.fees)}</b>
-                  </span>
-                  <span>
-                    Total <b className="font-mono text-lg">{usd(po.total)}</b>
-                  </span>
-                  {po.saving > 0 && (
-                    <Badge tone="green">
-                      Saves {usd(po.saving)} vs baseline {usd(po.baseline_total)}
-                    </Badge>
-                  )}
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {['draft', 'pending_approval'].includes(po.status) && canEdit && (
-                    <Button variant="primary" disabled={limitBlocked} busy={act.isPending && act.variables === 'approve'} onClick={() => act.mutate('approve')} title={limitBlocked ? 'Above your approval limit — Owner approval required' : undefined}>
-                      Approve
-                    </Button>
-                  )}
-                  {['draft', 'pending_approval', 'approved'].includes(po.status) && canEdit && (
-                    <Button variant={po.status === 'approved' ? 'primary' : 'secondary'} disabled={limitBlocked && po.status !== 'approved'} onClick={() => setSend(true)}>
-                      {po.status === 'approved' ? 'Send to supplier…' : 'Approve & send…'}
-                    </Button>
-                  )}
-                  {['draft', 'pending_approval', 'approved'].includes(po.status) && canEdit && (
-                    <Button variant="danger" onClick={() => act.mutate('cancel')}>
-                      Cancel PO
-                    </Button>
-                  )}
+          <div className="space-y-4">
+            <PageHeader
+              crumbs={[{ label: 'Orders', to: '/orders' }, { label: po.number }]}
+              title={
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono">{po.number}</span>
+                  <span className="font-normal text-muted">·</span> {po.supplier.name} <Status s={po.status} />
+                </span>
+              }
+              description={`Delivery ${po.delivery_date ?? '—'}${po.eta ? ` · ETA ${po.eta}` : ''} · created ${dt(po.created_at)}`}
+              actions={
+                <>
                   {!['draft', 'pending_approval', 'cancelled'].includes(po.status) && (
                     <>
-                      <a className="self-center text-sm text-accent" href={`/api/purchase-orders/${po.id}/print`} target="_blank" rel="noreferrer">
-                        Print
+                      <a className={linkBtn} href={`/api/purchase-orders/${po.id}/print`} target="_blank" rel="noreferrer">
+                        <Printer aria-hidden className="h-3.5 w-3.5" /> Print
                       </a>
-                      <a className="self-center text-sm text-accent" href={`/api/purchase-orders/${po.id}/csv`}>
-                        CSV
+                      <a className={linkBtn} href={`/api/purchase-orders/${po.id}/csv`}>
+                        <Download aria-hidden className="h-3.5 w-3.5" /> CSV
                       </a>
                     </>
                   )}
                   {['sent', 'confirmed', 'partially_confirmed', 'partially_received'].includes(po.status) && (
-                    <Link className="self-center text-sm text-accent" to={`/receiving/po/${po.id}`}>
-                      Receive delivery →
+                    <Link className={linkBtn} to={`/receiving/po/${po.id}`}>
+                      <Truck aria-hidden className="h-3.5 w-3.5" /> Receive delivery
                     </Link>
                   )}
-                </div>
-                {limitBlocked && ['draft', 'pending_approval'].includes(po.status) && <p className="mt-2 text-xs text-amber-800">Above the Chef approval limit — the Owner must approve this order.</p>}
-                {act.error && <div className="mt-2"><ErrorCard error={act.error} /></div>}
-              </Card>
-              {po.plan && <WhyPanel po={po} />}
-              <Card title="Thread">
-                <Thread type="purchase_order" id={po.id} />
-              </Card>
-            </div>
-            <div className="space-y-4">
-              <Card title="Supplier">
-                <div className="space-y-1 text-sm">
-                  <div className="font-medium">{po.supplier.name}</div>
-                  <div className="text-xs text-muted">{po.supplier.email}</div>
-                  <div className="text-xs">
-                    Minimum {usd(po.supplier.minOrderValue)} ({po.supplier.minOrderType}
-                    {po.supplier.minOrderType === 'soft' ? `, ${usd(po.supplier.belowMinFee)} fee below` : ''}) · delivery {usd(po.supplier.deliveryFee)} · cut-off {po.supplier.cutoffTime} {po.supplier.trusted && <Badge tone="green">trusted</Badge>}
-                  </div>
-                  {po.confirmation_deadline && <div className="text-xs">Confirmation due {dt(po.confirmation_deadline)} · reminders sent {po.reminders_sent}</div>}
-                </div>
-              </Card>
-              {portal && (
-                <Card title="Supplier portal link">
-                  <p className="text-xs text-muted">{po.send_channel === 'manual_link' ? 'Email is not configured — share this link with the supplier.' : 'Sent by email. Single-PO link, valid 7 days.'}</p>
-                  <a className="mt-1 block break-all font-mono text-xs text-accent" href={portal.replace(/^https?:\/\/[^/]+/, '')} target="_blank" rel="noreferrer">
-                    {portal}
-                  </a>
+                  {sendable && (
+                    <Button variant="danger" icon={Ban} onClick={() => setCancel(true)}>
+                      Cancel order
+                    </Button>
+                  )}
+                  {decidable && (
+                    <Button disabled={limitBlocked} icon={Check} busy={act.isPending && act.variables === 'approve'} onClick={() => act.mutate('approve')} title={limitBlocked ? 'Above your approval limit — Owner approval required' : undefined}>
+                      Approve
+                    </Button>
+                  )}
+                  {sendable && (
+                    <Button variant="primary" icon={Send} disabled={limitBlocked && po.status !== 'approved'} onClick={() => setSend(true)}>
+                      {po.status === 'approved' ? 'Send to supplier…' : 'Approve & send…'}
+                    </Button>
+                  )}
+                </>
+              }
+            />
+            {limitBlocked && decidable && <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Above the Chef approval limit — the Owner must approve this order.</p>}
+            {act.error && <ErrorCard error={act.error} />}
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="min-w-0 space-y-4 lg:col-span-2">
+                <Card title="Order lines" icon={ClipboardList} pad={false} subtitle={draft && canEdit ? 'Draft — pack counts can be edited' : undefined}>
+                  {po.min_order_warning && <div className="m-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{po.min_order_warning}</div>}
+                  <Table head={['Item', 'SKU', 'Need', 'Packs', 'Qty', 'Price', 'Line', 'Supplier said']} align={['left', 'left', 'right', 'left', 'right', 'right', 'right', 'left']}>
+                    {po.lines.map((l: any) => (
+                      <Line key={l.id} po={po} l={l} editable={draft && canEdit} onSaved={refresh} />
+                    ))}
+                  </Table>
+                  <dl className="flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1 border-t border-line px-4 py-3 text-sm">
+                    <div className="flex gap-2">
+                      <dt className="text-muted">Subtotal</dt>
+                      <dd className="font-mono">{usd(po.subtotal)}</dd>
+                    </div>
+                    <div className="flex gap-2">
+                      <dt className="text-muted">Fees</dt>
+                      <dd className="font-mono">{usd(po.fees)}</dd>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <dt className="text-muted">Total</dt>
+                      <dd className="font-mono text-base font-semibold">{usd(po.total)}</dd>
+                    </div>
+                    {po.saving > 0 && (
+                      <Badge tone="green">
+                        Saves {usd(po.saving)} vs baseline {usd(po.baseline_total)}
+                      </Badge>
+                    )}
+                  </dl>
                 </Card>
-              )}
-              <Card title="Supplier responses">
-                {po.responses.length ? (
-                  <ol className="space-y-2 text-sm">
-                    {po.responses.map((r: any) => (
-                      <li key={r.id} className="rounded-lg border border-line p-2">
-                        <div className="text-xs text-muted">
-                          v{r.version} · {dt(r.receivedAt)} {r.eta && `· ETA ${r.eta}`}
-                        </div>
-                        <ul className="text-xs">
-                          {r.lines.map((l: any) => (
-                            <li key={l.poLineId}>
-                              {po.lines.find((x: any) => x.id === l.poLineId)?.ingredient}: {l.action}
-                              {l.qty !== undefined ? ` ${l.qty}` : ''}
-                              {l.substitute ? ` → “${l.substitute.description}” ${usd(l.substitute.unitPrice)}` : ''}
-                            </li>
-                          ))}
-                        </ul>
-                        {r.untrustedNote && <div className="mt-1 text-xs text-amber-800">Note (untrusted supplier text): “{r.untrustedNote}”</div>}
+                {po.plan && <WhyPanel po={po} />}
+                <Card title="Thread" subtitle="Discuss this order with the team; @mention an agent to ask it">
+                  <Thread type="purchase_order" id={po.id} />
+                </Card>
+              </div>
+              <div className="min-w-0 space-y-4">
+                <Card title="Supplier">
+                  <dl className="space-y-1.5 text-sm">
+                    <div className="flex items-center gap-2 font-medium">
+                      {po.supplier.name} {po.supplier.trusted && <Badge tone="green">trusted</Badge>}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted">
+                      <Mail aria-hidden className="h-3.5 w-3.5" /> {po.supplier.email}
+                    </div>
+                    <Row label="Minimum order" value={`${usd(po.supplier.minOrderValue)} (${po.supplier.minOrderType}${po.supplier.minOrderType === 'soft' ? `, ${usd(po.supplier.belowMinFee)} fee below` : ''})`} />
+                    <Row label="Delivery fee" value={usd(po.supplier.deliveryFee)} />
+                    <Row label="Order cut-off" value={po.supplier.cutoffTime} />
+                    {po.confirmation_deadline && <Row label="Confirmation due" value={`${dt(po.confirmation_deadline)} · ${po.reminders_sent} reminder(s)`} />}
+                  </dl>
+                </Card>
+                {portal && (
+                  <Card title="Supplier portal link">
+                    <p className="text-xs text-muted">{po.send_channel === 'manual_link' ? 'Email is not configured — share this link with the supplier.' : 'Sent by email. Single-order link, valid 7 days.'}</p>
+                    <a className="mt-1.5 flex items-start gap-1 break-all font-mono text-xs text-accent hover:underline" href={portal.replace(/^https?:\/\/[^/]+/, '')} target="_blank" rel="noreferrer">
+                      {portal}
+                      <ExternalLink aria-hidden className="mt-0.5 h-3 w-3 shrink-0" />
+                    </a>
+                  </Card>
+                )}
+                <Card title="Supplier responses">
+                  {po.responses.length ? (
+                    <ol className="space-y-2 text-sm">
+                      {po.responses.map((r: any) => (
+                        <li key={r.id} className="rounded-md border border-line p-2.5">
+                          <div className="text-xs text-muted">
+                            v{r.version} · {dt(r.receivedAt)} {r.eta && `· ETA ${r.eta}`}
+                          </div>
+                          <ul className="mt-1 space-y-0.5 text-xs">
+                            {r.lines.map((l: any) => (
+                              <li key={l.poLineId} className="flex flex-wrap gap-1">
+                                <span className="font-medium">{po.lines.find((x: any) => x.id === l.poLineId)?.ingredient}:</span>
+                                <Badge tone={l.action === 'confirm' ? 'green' : l.action === 'unavailable' ? 'red' : 'amber'}>{l.action}</Badge>
+                                {l.qty !== undefined ? ` ${l.qty}` : ''}
+                                {l.substitute ? ` → “${l.substitute.description}” ${usd(l.substitute.unitPrice)}` : ''}
+                              </li>
+                            ))}
+                          </ul>
+                          {r.untrustedNote && <div className="mt-1 text-xs text-amber-800">Note (untrusted supplier text): “{r.untrustedNote}”</div>}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-sm text-muted">No response yet.</p>
+                  )}
+                </Card>
+                <Card title="History" icon={History}>
+                  {po.history?.length ? (
+                    <ol className="relative space-y-3 border-l border-line pl-4 text-sm">
+                      {po.history.map((h: any) => (
+                        <li key={h.id} className="relative">
+                          <span aria-hidden className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full border-2 border-card bg-slate-300" />
+                          <div className="first-letter:uppercase">{h.action.replace(/^po\./, '').replace(/[._]/g, ' ')}</div>
+                          <div className="text-xs text-muted">
+                            {h.actor} · {dt(h.at)}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-sm text-muted">No changes recorded.</p>
+                  )}
+                </Card>
+                <Card title="Emails (outbox)">
+                  <ul className="space-y-1.5 text-xs">
+                    {po.emails.map((e: any) => (
+                      <li key={e.id} className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-medium">{e.kind.replace(/_/g, ' ')}</span> → {e.to_email} <Status s={e.status} /> {e.error && <span className="text-red-700">{e.error}</span>}
                       </li>
                     ))}
-                  </ol>
-                ) : (
-                  <p className="text-sm text-muted">No response yet.</p>
-                )}
-              </Card>
-              <Card title="Emails (outbox)">
-                <ul className="space-y-1 text-xs">
-                  {po.emails.map((e: any) => (
-                    <li key={e.id}>
-                      {e.kind} → {e.to_email} <Status s={e.status} /> {e.error && <span className="text-red-700">{e.error}</span>}
-                    </li>
-                  ))}
-                  {!po.emails.length && <li className="text-muted">None</li>}
-                </ul>
-              </Card>
+                    {!po.emails.length && <li className="text-muted">None</li>}
+                  </ul>
+                </Card>
+              </div>
             </div>
             {send && <SendDialog po={po} onClose={() => setSend(false)} onDone={refresh} />}
+            <ConfirmDialog
+              open={cancel}
+              title={`Cancel ${po.number}?`}
+              body={`The order to ${po.supplier.name} (${usd(po.total)}) will be cancelled and will not be sent. This cannot be undone.`}
+              confirmLabel="Cancel order"
+              tone="danger"
+              busy={act.isPending && act.variables === 'cancel'}
+              onConfirm={() => act.mutate('cancel')}
+              onClose={() => setCancel(false)}
+            />
           </div>
         );
       }}
@@ -217,10 +299,20 @@ export function OrderDetailPage({ me }: { me: Me }) {
   );
 }
 
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-3 text-xs">
+      <dt className="text-muted">{label}</dt>
+      <dd className="text-right">{value}</dd>
+    </div>
+  );
+}
+
 function Line({ po, l, editable, onSaved }: { po: any; l: any; editable: boolean; onSaved: () => void }) {
   const [packs, setPacks] = useState<number>(l.packs);
-  const m = useMutation({ mutationFn: () => patch(`/purchase-orders/${po.id}/lines/${l.id}`, { packs }), onSuccess: onSaved });
-  const said = l.unavailable ? 'unavailable' : l.substitute ? `substitute: ${l.substitute.description}` : l.confirmed_qty !== null ? `${num(l.confirmed_qty)} confirmed` : '—';
+  const toast = useToast();
+  const m = useMutation({ mutationFn: () => patch(`/purchase-orders/${po.id}/lines/${l.id}`, { packs }), onSuccess: () => (onSaved(), toast('success', `${l.ingredient} updated`, 'Recorded as a correction.')) });
+  const said = l.unavailable ? <Badge tone="red">unavailable</Badge> : l.substitute ? <Badge tone="amber">substitute: {l.substitute.description}</Badge> : l.confirmed_qty !== null ? <span className={cx(l.confirmed_qty < l.qty && 'text-amber-800')}>{num(l.confirmed_qty)} confirmed</span> : <span className="text-muted">—</span>;
   return (
     <tr className={cx(l.packs === 0 && 'opacity-50')}>
       <td className="px-3 py-2">
@@ -229,29 +321,29 @@ function Line({ po, l, editable, onSaved }: { po: any; l: any; editable: boolean
         {l.edited_by_user ? <Badge tone="violet">edited</Badge> : null}
       </td>
       <td className="px-3 py-2 font-mono text-xs">{l.sku}</td>
-      <td className="px-3 py-2 font-mono">{num(l.need)}</td>
+      <td className="px-3 py-2 text-right font-mono">{num(l.need)}</td>
       <td className="px-3 py-2">
         {editable ? (
           <span className="flex items-center gap-1">
-            <input aria-label={`Packs of ${l.ingredient}`} type="number" min={0} className={cx(inputCls, 'w-16 font-mono')} value={packs} onChange={(e) => setPacks(Math.max(0, Math.floor(Number(e.target.value))))} />
+            <input aria-label={`Packs of ${l.ingredient}`} type="number" min={0} className={cx(inputCls.replace('w-full ', ''), 'w-16 font-mono')} value={packs} onChange={(e) => setPacks(Math.max(0, Math.floor(Number(e.target.value))))} />
             {packs !== l.packs && (
-              <Button busy={m.isPending} onClick={() => m.mutate()}>
+              <Button size="sm" busy={m.isPending} onClick={() => m.mutate()}>
                 Save
               </Button>
             )}
           </span>
         ) : (
-          <span className="font-mono">
+          <span className="whitespace-nowrap font-mono">
             {l.packs} × {l.pack_size}
           </span>
         )}
         {m.error && <div className="text-xs text-red-700">{(m.error as Error).message}</div>}
       </td>
-      <td className="px-3 py-2 font-mono">
+      <td className="whitespace-nowrap px-3 py-2 text-right font-mono">
         {num(l.qty)} {l.unit}
       </td>
-      <td className="px-3 py-2 font-mono">{usd(l.unit_price)}</td>
-      <td className="px-3 py-2 font-mono">{usd(l.line_total)}</td>
+      <td className="px-3 py-2 text-right font-mono">{usd(l.unit_price)}</td>
+      <td className="px-3 py-2 text-right font-mono">{usd(l.line_total)}</td>
       <td className="px-3 py-2 text-xs">{said}</td>
     </tr>
   );
@@ -262,61 +354,72 @@ function WhyPanel({ po }: { po: any }) {
   return (
     <Card title="Why this supplier?" subtitle={`Plan ${p.method === 'milp' ? 'MILP (HiGHS), verified' : 'heuristic'}${p.fallbackReason ? ` · ${p.fallbackReason}` : ''}`} actions={p.method !== 'milp' && <Badge>heuristic plan</Badge>}>
       <div className="grid gap-3 text-sm sm:grid-cols-3">
-        <div className="rounded-lg border border-line p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Optimised (all suppliers)</div>
-          <div className="font-mono text-xl">{usd(p.total)}</div>
+        <div className="rounded-md border border-line p-3">
+          <div className="text-xs text-muted">Optimised (all suppliers)</div>
+          <div className="mt-0.5 font-mono text-lg font-semibold">{usd(p.total)}</div>
         </div>
-        <div className="rounded-lg border border-line p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Baseline (preferred suppliers)</div>
-          <div className="font-mono text-xl">{usd(p.baselineTotal)}</div>
+        <div className="rounded-md border border-line p-3">
+          <div className="text-xs text-muted">Baseline (preferred suppliers)</div>
+          <div className="mt-0.5 font-mono text-lg font-semibold">{usd(p.baselineTotal)}</div>
         </div>
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Saving</div>
-          <div className="font-mono text-xl text-emerald-700">{usd(p.saving)}</div>
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+          <div className="text-xs text-emerald-800">Saving</div>
+          <div className="mt-0.5 font-mono text-lg font-semibold text-emerald-700">{usd(p.saving)}</div>
         </div>
       </div>
-      {p.explanations._summary && <p className="mt-2 text-sm">Across today's orders: {p.explanations._summary}.</p>}
+      {p.explanations._summary && <p className="mt-3 text-sm">Across today's orders: {p.explanations._summary}.</p>}
       <div className="mt-3 text-sm">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Baseline would have been</div>
+        <div className="text-xs font-medium text-muted">The preferred-supplier baseline would have been</div>
         <ul className="mt-1 space-y-0.5 text-xs">
           {p.baseline.suppliers.map((s: any) => (
-            <li key={s.supplierId}>
-              {s.name}: lines {usd(s.subtotal)} + delivery {usd(s.deliveryFee)}
-              {s.belowMinFee ? ` + small-order fee ${usd(s.belowMinFee)}` : ''} = <span className="font-mono">{usd(s.total)}</span>
+            <li key={s.supplierId} className="flex flex-wrap justify-between gap-x-3">
+              <span>
+                {s.name}: lines {usd(s.subtotal)} + delivery {usd(s.deliveryFee)}
+                {s.belowMinFee ? ` + small-order fee ${usd(s.belowMinFee)}` : ''}
+              </span>
+              <span className="font-mono">{usd(s.total)}</span>
             </li>
           ))}
         </ul>
       </div>
-      <p className="mt-2 text-[11px] text-muted">Quantities, prices and totals come from the optimiser and are independently verified; the AI never writes them. [Illustrative demo data]</p>
+      <p className="mt-3 text-[11px] text-muted">Quantities, prices and totals come from the optimiser and are independently verified; the AI never writes them.</p>
     </Card>
   );
 }
 
 function SendDialog({ po, onClose, onDone }: { po: any; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
   const m = useMutation({
     mutationFn: () => post(`/purchase-orders/${po.id}/send`),
     onSuccess: () => {
       onDone();
       onClose();
+      toast('success', `${po.number} sent`, `${po.supplier.name} can now confirm, reduce or substitute lines.`);
     },
   });
   return (
     <Modal
       open
       onClose={onClose}
-      title={`Send ${po.number}`}
+      title={`Send ${po.number} to ${po.supplier.name}?`}
       footer={
-        <Button variant="primary" busy={m.isPending} onClick={() => m.mutate()}>
-          {po.status === 'approved' ? 'Send' : 'Approve & send'}
-        </Button>
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" icon={Send} busy={m.isPending} onClick={() => m.mutate()}>
+            {po.status === 'approved' ? 'Send' : 'Approve & send'}
+          </Button>
+        </>
       }
     >
       <div className="space-y-2 text-sm">
         <p>
-          To <b>{po.supplier.name}</b> &lt;{po.supplier.email}&gt; — in demo mode the email goes to the demo inbox (SUPPLIER_EMAIL_OVERRIDE).
+          To <b>{po.supplier.name}</b> &lt;{po.supplier.email}&gt; — while SUPPLIER_EMAIL_OVERRIDE is set, it goes to that inbox instead.
         </p>
         <p>
-          {po.lines.filter((l: any) => l.packs > 0).length} lines · total <b className="font-mono">{usd(po.total)}</b>. The email contains a single-PO portal link (7 days) to confirm, short or substitute.
+          {po.lines.filter((l: any) => l.packs > 0).length} lines · total <b className="font-mono">{usd(po.total)}</b>. The email contains a single-order portal link (7 days) to confirm, short or substitute.
+        </p>
+        <p className="flex items-center gap-1 text-xs text-muted">
+          <ArrowRight aria-hidden className="h-3 w-3" /> Without email configured, a portal link appears on this page to share instead.
         </p>
         {m.error && <ErrorCard error={m.error} />}
       </div>

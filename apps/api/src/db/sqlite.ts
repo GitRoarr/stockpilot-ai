@@ -66,9 +66,16 @@ function norm(p: Param): string | number | bigint | null | Uint8Array {
 
 const schemaPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'schema.sql');
 
+// Columns added after the first release. CREATE TABLE IF NOT EXISTS never alters an existing table, so existing
+// databases get them here (idempotent; data is kept).
+const ADDED_COLUMNS: [table: string, column: string, ddl: string][] = [['ingredients', 'reorder_level', 'REAL CHECK (reorder_level IS NULL OR reorder_level >= 0)']];
+
 export function openDb(file: string): Db {
   const db = new Db(file);
   db.exec(readFileSync(schemaPath, 'utf8'));
+  for (const [table, column, ddl] of ADDED_COLUMNS) {
+    if (!db.all<{ name: string }>(`PRAGMA table_info(${table})`).some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  }
   return db;
 }
 

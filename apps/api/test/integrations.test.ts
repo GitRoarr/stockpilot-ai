@@ -4,6 +4,7 @@ import { setConfig } from '../src/config.js';
 import { db } from '../src/db/sqlite.js';
 import { drainJobs } from '../src/jobs/worker.js';
 import { setFetch } from '../src/integrations/http.js';
+import { brevoConfigured, sendBrevo } from '../src/integrations/brevo.js';
 import { filterHolidays, fetchHolidays } from '../src/integrations/nagerDate.js';
 import { fetchForecast } from '../src/integrations/openMeteo.js';
 import { fromInteractionSteps, toInteractionSteps } from '../src/agents/llm/interactions.js';
@@ -18,7 +19,7 @@ let app: FastifyInstance | undefined;
 afterEach(async () => {
   await app?.close();
   app = undefined;
-  setConfig({ BREVO_API_KEY: undefined, EMAIL_FROM: undefined });
+  setConfig({ BREVO_API_KEY: undefined, BREVO_SENDER_EMAIL: undefined, BREVO_SENDER_NAME: undefined, EMAIL_FROM: undefined });
 });
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -114,6 +115,26 @@ describe('Brevo via the outbox (AC-090)', () => {
   });
 });
 
+describe('Brevo sender configuration', () => {
+  it('BREVO_SENDER_EMAIL / BREVO_SENDER_NAME are used as the sender and take precedence over EMAIL_FROM', async () => {
+    setConfig({ BREVO_API_KEY: 'key', BREVO_SENDER_EMAIL: 'orders@harborvine.example', BREVO_SENDER_NAME: 'Harbor & Vine Purchasing', EMAIL_FROM: 'old@stockpilot.example' });
+    let body: any;
+    setFetch((async (_u: string, init: RequestInit) => {
+      body = JSON.parse(String(init.body));
+      return json(201, { messageId: '<m1@brevo>' });
+    }) as never);
+    expect(await sendBrevo({ to: 'chef@harborvine.example', subject: 's', html: '<p>h</p>', text: 't' })).toEqual({ ok: true, messageId: '<m1@brevo>' });
+    expect(body.sender).toEqual({ email: 'orders@harborvine.example', name: 'Harbor & Vine Purchasing' });
+  });
+  it('the earlier EMAIL_FROM still works, and without any sender Brevo reports not configured', async () => {
+    setConfig({ BREVO_API_KEY: 'key', BREVO_SENDER_EMAIL: undefined, BREVO_SENDER_NAME: undefined, EMAIL_FROM: 'old@stockpilot.example' });
+    expect(brevoConfigured()).toBe(true);
+    setConfig({ EMAIL_FROM: undefined });
+    expect(brevoConfigured()).toBe(false);
+    expect(await sendBrevo({ to: 'x@y.example', subject: 's', html: '', text: '' })).toMatchObject({ ok: false, message: 'not_configured' });
+  });
+});
+
 describe('Gemini adapters (history mapping, store:false)', () => {
   const history = [
     { role: 'user' as const, text: 'go' },
@@ -142,5 +163,16 @@ describe('invoice validation (AC-083)', () => {
     const issues = validateExtraction({ supplierName: 'GG', invoiceNumber: 'X', date: '2020-01-01', currency: 'USD', lines: [{ description: 'Chicken', qty: 40, unitPrice: 3.25, extended: 103, confidence: 0.9 }], total: 103 }, '2026-10-25');
     expect(issues.find((i) => i.field === 'lines.0.extended')!.message).toContain('math_error');
     expect(issues.some((i) => i.field === 'date')).toBe(true);
+  });
+});
+
+describe('Gemini tool declarations', () => {
+  it('contain no schema keywords the Gemini API rejects (boolean exclusiveMinimum/Maximum, oneOf)', async () => {
+    const { declarations } = await import('../src/agents/tools/index.js');
+    const { TOOL_NAMES } = await import('../src/agents/manifest.js');
+    const json = JSON.stringify(declarations([...TOOL_NAMES]));
+    expect(json).not.toMatch(/"exclusive(Minimum|Maximum)":(true|false)/);
+    expect(json).not.toContain('"oneOf"');
+    expect(json).toContain('"anyOf"'); // the working-agreement union is still expressed
   });
 });

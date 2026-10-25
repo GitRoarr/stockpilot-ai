@@ -154,7 +154,7 @@ export const USERS = [
   { id: 'usr_daniel', name: 'Daniel (Chef)', email: 'daniel@harborvine.example', role: 'chef' },
   { id: 'usr_leo', name: 'Leo (Staff)', email: 'leo@harborvine.example', role: 'staff' },
 ] as const;
-export const DEMO_PASSWORD = 'stockpilot-demo';
+export const DEMO_PASSWORD = 'harborvine2026';
 
 /**
  * Opening stock targets, as the planned need on the demo morning (Solution Design §D2.2, §D2.4 worked examples):

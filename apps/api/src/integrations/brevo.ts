@@ -7,8 +7,12 @@ export type BrevoResult =
   | { ok: false; status: number; message: string; retryable: boolean }
   | { ok: false; status: 0; message: 'not_configured'; retryable: false };
 
+/** The verified sender: BREVO_SENDER_* first, then the earlier EMAIL_FROM / EMAIL_FROM_NAME. */
+export const senderEmail = (): string | undefined => config.BREVO_SENDER_EMAIL ?? config.EMAIL_FROM;
+export const senderName = (): string => config.BREVO_SENDER_NAME ?? config.EMAIL_FROM_NAME;
+
 export function brevoConfigured(): boolean {
-  return Boolean(config.BREVO_API_KEY && config.EMAIL_FROM);
+  return Boolean(config.BREVO_API_KEY && senderEmail());
 }
 
 export async function sendBrevo(msg: { to: string; toName?: string | null; subject: string; html: string; text: string }): Promise<BrevoResult> {
@@ -18,7 +22,7 @@ export async function sendBrevo(msg: { to: string; toName?: string | null; subje
       method: 'POST',
       headers: { 'api-key': config.BREVO_API_KEY!, 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify({
-        sender: { email: config.EMAIL_FROM, name: config.EMAIL_FROM_NAME },
+        sender: { email: senderEmail(), name: senderName() },
         to: [{ email: msg.to, ...(msg.toName ? { name: msg.toName } : {}) }],
         subject: msg.subject,
         htmlContent: msg.html,
@@ -34,9 +38,20 @@ export async function sendBrevo(msg: { to: string; toName?: string | null; subje
   }
 }
 
-/** Key check for `npm run smoke` and "Test connection" (GET /v3/account). */
+/**
+ * Key check for `npm run smoke` and "Test connection". Uses a read-only transactional-email endpoint, so keys limited
+ * to transactional email (no account permission) are reported correctly; nothing is sent.
+ */
 export async function checkBrevo(): Promise<string> {
   if (!config.BREVO_API_KEY) return 'no_key';
-  const res = await fetchImpl('https://api.brevo.com/v3/account', { headers: { 'api-key': config.BREVO_API_KEY, accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
-  return res.ok ? 'ok' : `HTTP ${res.status}`;
+  try {
+    const res = await fetchImpl('https://api.brevo.com/v3/smtp/statistics/aggregatedReport?days=1', { headers: { 'api-key': config.BREVO_API_KEY, accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { message?: string };
+      return `HTTP ${res.status}${body.message ? `: ${body.message}` : ''}`;
+    }
+    return senderEmail() ? 'ok' : 'ok (key valid; set BREVO_SENDER_EMAIL to send)';
+  } catch (e) {
+    return `error: ${(e as Error).message}`;
+  }
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, post } from '../api/client';
 import type { Me } from '../components/Layout';
-import { Badge, Button, Card, cx, DemoBadge, ErrorCard, Field, inputCls, Q, usd } from '../components/ui';
+import { Badge, Button, Card, cx, ErrorCard, Field, inputCls, Q, usd } from '../components/ui';
 
 // Hire your team (FR-111): template card + 5-step wizard → deploy → Team page with onboarding tasks.
 const STEPS = ['Restaurant & location', 'Suppliers & offers', 'Schedule & hours', 'Autonomy & limits', 'Channels'];
@@ -16,7 +16,7 @@ export function OnboardingPage({ me }: { me: Me }) {
   const qc = useQueryClient();
   const tpl = useQuery({ queryKey: ['templates'], queryFn: () => api<any[]>('/templates') });
   const [step, setStep] = useState(-1);
-  const [f, setF] = useState({ name: 'Harbor & Vine Bistro (demo)', latitude: 37.7749, longitude: -122.4194, timezone: 'America/Los_Angeles', morningRunTime: '06:00', from: '06:00', to: '22:00', preset: 'balanced' as keyof typeof PRESETS, chefApprovalLimit: 1500, autoSendMaxTotal: 500, briefingEmail: true });
+  const [f, setF] = useState({ name: 'Harbor & Vine Bistro', latitude: 37.7749, longitude: -122.4194, timezone: 'America/Los_Angeles', morningRunTime: '06:00', from: '06:00', to: '22:00', preset: 'balanced' as keyof typeof PRESETS, chefApprovalLimit: 1500, autoSendMaxTotal: 500, briefingEmail: true });
   const deploy = useMutation({
     mutationFn: () =>
       post('/templates/restaurant-purchasing-team/deploy', {
@@ -43,9 +43,8 @@ export function OnboardingPage({ me }: { me: Me }) {
     <main className="mx-auto max-w-3xl px-4 py-10">
       <div className="mb-2 flex items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-widest text-accent">Hire your team</span>
-        <DemoBadge />
       </div>
-      <h1 className="text-2xl font-semibold">Instead of hiring a purchasing manager, deploy one.</h1>
+      <h1 className="text-xl font-semibold tracking-tight">Instead of hiring a purchasing manager, deploy one.</h1>
       <p className="mt-1 text-sm text-muted">Pick a pre-built team, give it a job description, and it starts working today.</p>
 
       {step < 0 && (
@@ -101,7 +100,7 @@ export function OnboardingPage({ me }: { me: Me }) {
             {step === 1 && (
               <div className="space-y-2 text-sm">
                 <p>
-                  Suppliers and offers come from the <b>illustrative demo data</b> (5 suppliers, ≈55 offers; ≥12 ingredients with two suppliers). CSV import is a P1 feature.
+                  Suppliers and offers are preloaded (5 suppliers, ≈55 offers; ≥12 ingredients with two suppliers). You can add more later, or import inventory and sales from CSV in Inventory.
                 </p>
                 <p className="text-xs text-muted">You can edit suppliers, minimums, fees and offers later under Inventory.</p>
               </div>

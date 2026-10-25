@@ -31,7 +31,7 @@ export interface LlmClient {
   structured(req: StructuredRequest): Promise<StructuredResponse>;
 }
 
-export type FallbackReason = 'no_api_key' | 'model_unavailable' | 'rate_limited' | 'timeout' | 'validation_failed' | 'budget_exhausted' | 'model_error';
+export type FallbackReason = 'no_api_key' | 'model_unavailable' | 'rate_limited' | 'timeout' | 'validation_failed' | 'budget_exhausted' | 'model_error' | 'model_cooldown';
 
 export class LlmUnavailable extends Error {
   constructor(

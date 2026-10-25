@@ -27,9 +27,13 @@ const EnvSchema = z.object({
   GEMINI_API_STYLE: z.enum(['interactions', 'generate_content']).default('interactions'),
   GEMINI_MAX_RPM: z.coerce.number().int().positive().default(10),
   GEMINI_DAILY_BUDGET: z.coerce.number().int().positive().default(250),
+  GEMINI_THINKING_LEVEL: z.enum(['low', 'medium', 'high', 'default']).default('low'),
   AI_LOG_PAYLOADS: bool(true),
   DEMO_MODE: bool(true),
   BREVO_API_KEY: optional,
+  // Verified Brevo sender. EMAIL_FROM / EMAIL_FROM_NAME are the earlier names and still work as fallbacks.
+  BREVO_SENDER_EMAIL: optional,
+  BREVO_SENDER_NAME: optional,
   EMAIL_FROM: optional,
   EMAIL_FROM_NAME: z.string().default('StockPilot AI'),
   SUPPLIER_EMAIL_OVERRIDE: optional,

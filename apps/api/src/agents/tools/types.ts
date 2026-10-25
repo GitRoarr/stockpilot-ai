@@ -20,6 +20,7 @@ export type RunInfo = {
   authorityUserId: string | null;
   depth: number;
   mode: 'ai' | 'deterministic';
+  fallbackReason?: string | null;
 };
 
 export type ToolContext = { run: RunInfo; actor: Actor; stepNo: number; callIndex: number };

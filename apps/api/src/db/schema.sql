@@ -229,6 +229,7 @@ CREATE TABLE IF NOT EXISTS ingredients (
   safety_days REAL NOT NULL DEFAULT 1 CHECK (safety_days BETWEEN 0 AND 7),
   service_level REAL NOT NULL DEFAULT 0.95,
   max_overbuy_days REAL NOT NULL DEFAULT 3,
+  reorder_level REAL CHECK (reorder_level IS NULL OR reorder_level >= 0),
   active INTEGER NOT NULL DEFAULT 1
 );
 

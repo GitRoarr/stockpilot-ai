@@ -4,7 +4,7 @@ import { db } from '../db/sqlite.js';
 import { checkGrounding } from '../engines/grounding.js';
 import { notify, publish } from '../lib/events.js';
 import { getSettings } from '../lib/settings.js';
-import { id, json, localDate, nowIso } from '../lib/util.js';
+import { addDays, id, json, localDate, nowIso } from '../lib/util.js';
 import { esc, layout, queueEmail } from '../services/email.js';
 import { getForecast } from '../services/forecast.js';
 import { ledgerSummary } from '../services/ledger.js';
@@ -25,31 +25,31 @@ export const BriefingSchema = z.object({
 });
 export type Briefing = z.infer<typeof BriefingSchema>;
 
+// Sent to Gemini as the response schema. Item limits are enforced by BriefingSchema (Zod) instead: Gemini rejects this
+// shape with "too many states for serving" when minItems/maxItems or $ref are included (verified live).
+const ITEM = { type: 'object', properties: { text: { type: 'string' }, refType: { type: 'string', enum: [...REF_TYPES] }, refId: { type: 'string' } }, required: ['text'] };
 const BRIEFING_JSON_SCHEMA = {
   type: 'object',
   properties: {
     summary: { type: 'string' },
     agents: {
       type: 'array',
-      minItems: 1,
-      maxItems: 4,
       items: {
         type: 'object',
         properties: {
           agentId: { type: 'string', enum: ['pilot', 'demand-planner', 'buyer', 'ap-clerk'] },
-          done: { type: 'array', maxItems: 6, items: { $ref: '#/$defs/item' } },
-          today: { type: 'array', maxItems: 6, items: { $ref: '#/$defs/item' } },
-          needsYou: { type: 'array', maxItems: 6, items: { $ref: '#/$defs/item' } },
+          done: { type: 'array', items: ITEM },
+          today: { type: 'array', items: ITEM },
+          needsYou: { type: 'array', items: ITEM },
         },
         required: ['agentId', 'done', 'today', 'needsYou'],
       },
     },
-    wasteReductionIdeas: { type: 'array', maxItems: 4, items: { type: 'object', properties: { text: { type: 'string' }, ingredientIds: { type: 'array', items: { type: 'string' } } }, required: ['text', 'ingredientIds'] } },
-    risks: { type: 'array', maxItems: 6, items: { type: 'string' } },
+    wasteReductionIdeas: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' }, ingredientIds: { type: 'array', items: { type: 'string' } } }, required: ['text', 'ingredientIds'] } },
+    risks: { type: 'array', items: { type: 'string' } },
     confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
   },
   required: ['summary', 'agents', 'wasteReductionIdeas', 'risks', 'confidence'],
-  $defs: { item: { type: 'object', properties: { text: { type: 'string' }, refType: { type: 'string', enum: [...REF_TYPES] }, refId: { type: 'string' } }, required: ['text'] } },
 };
 
 export type BriefingFacts = ReturnType<typeof buildFacts>;
@@ -67,11 +67,14 @@ export function buildFacts(sinceIso: string) {
   const disputes = db().all<any>(`SELECT id, number, status, amount_claimed FROM disputes WHERE status IN ('draft','sent','acknowledged')`);
   const runs = db().all<any>(`SELECT agent_id, goal, status FROM agent_runs WHERE started_at >= ? AND status IN ('completed','budget_exhausted','failed')`, sinceIso);
   const tomorrow = fc.context.days[1];
+  // Holidays in the coming week matter for ordering ahead (supplier lead times), not only tomorrow's.
+  const upcoming = db().all<{ date: string; name: string }>(`SELECT date, MIN(name) AS name FROM holidays WHERE date > ? AND date <= ? GROUP BY date ORDER BY date`, date, addDays(date, 7));
   const beats = fc.items.filter((i) => (i.wape[i.model] ?? 9) <= (i.baselineWape ?? 0)).length;
   return {
     date,
     restaurant: getSettings().restaurantName,
     weatherTomorrow: tomorrow ? { date: tomorrow.date, tmaxF: tomorrow.tmaxF, precipIn: tomorrow.precipIn, holiday: tomorrow.holiday } : null,
+    upcomingHolidays: upcoming.map((h) => ({ date: h.date, name: h.name })),
     contextStatus: Object.fromEntries(Object.entries(fc.context.status).map(([k, v]) => [k, v.status])),
     critical: needs.filter((n) => n.trace.status === 'critical').map((n) => ({ ingredientId: n.ingredientId, name: n.name, daysOfCover: n.trace.daysOfCover })),
     low: needs.filter((n) => n.trace.status === 'low').map((n) => ({ ingredientId: n.ingredientId, name: n.name, daysOfCover: n.trace.daysOfCover })),
@@ -108,7 +111,7 @@ export function ruleBasedBriefing(f: BriefingFacts): Briefing {
       {
         agentId: 'demand-planner',
         done: [{ text: `Refreshed weather and holidays (weather ${f.contextStatus.weather_forecast ?? 'not checked'}) and forecast ${f.forecast.items} dishes` }],
-        today: f.weatherTomorrow?.holiday ? [{ text: `Holiday tomorrow: ${f.weatherTomorrow.holiday}` }] : [],
+        today: f.upcomingHolidays.map((h) => ({ text: h.date === f.weatherTomorrow?.date ? `Holiday tomorrow: ${h.name} — the forecast includes its effect` : `${h.name} on ${h.date} — the forecast includes its effect; order ahead for supplier lead times` })),
         ...byAgent('demand-planner'),
       },
       {
@@ -159,10 +162,10 @@ export function validateBriefing(b: unknown, f: BriefingFacts): { ok: true; brie
 }
 
 const SYSTEM =
-  'You are Pilot, the purchasing lead of a restaurant AI team. Write the daily standup from the JSON facts only. Per agent: what was done, what is planned today, and what needs a human (link proposals and questions by their IDs). Waste-reduction ideas may only use ingredient IDs from inStockIngredientIds. Never state a number, price or date that is not in the facts. Keep each item short.';
+  'You are Pilot, the purchasing lead of a restaurant AI team. Write the daily standup from the JSON facts only. Per agent: what was done, what is planned today, and what needs a human (link proposals and questions by their IDs). Waste-reduction ideas may only use ingredient IDs from inStockIngredientIds. If weatherTomorrow.holiday is set, name that holiday in the today items of the demand-planner agent. Also name every holiday in upcomingHolidays (with its date) in the demand-planner today items. Never state a number, price or date that is not in the facts. Keep each item short.';
 
-export async function generateBriefing(f: BriefingFacts, useAi: boolean): Promise<{ briefing: Briefing; mode: 'ai' | 'rule_based'; reason?: FallbackReason; model?: string }> {
-  if (!useAi) return { briefing: ruleBasedBriefing(f), mode: 'rule_based', reason: 'no_api_key' };
+export async function generateBriefing(f: BriefingFacts, useAi: boolean, fallbackReason?: string | null): Promise<{ briefing: Briefing; mode: 'ai' | 'rule_based'; reason?: FallbackReason; model?: string }> {
+  if (!useAi) return { briefing: ruleBasedBriefing(f), mode: 'rule_based', reason: (fallbackReason as FallbackReason | null) ?? 'no_api_key' };
   const avail = aiAvailable();
   if (!avail.ok) return { briefing: ruleBasedBriefing(f), mode: 'rule_based', reason: avail.reason };
   let errors: string[] = [];
@@ -191,7 +194,7 @@ export async function publishBriefing(run: RunInfo, note?: string) {
   }
   const since = db().get<{ started_at: string }>(`SELECT started_at FROM agent_runs WHERE id = ?`, run.id)?.started_at ?? nowIso();
   const facts = buildFacts(since);
-  const { briefing, mode, reason, model } = await generateBriefing(facts, run.mode === 'ai');
+  const { briefing, mode, reason, model } = await generateBriefing(facts, run.mode === 'ai', run.fallbackReason);
   const bid = id('brf');
   db().tx(() => {
     db().run(
@@ -223,11 +226,11 @@ function briefingEmail(b: Briefing, mode: string, reason?: string) {
   const sec = (title: string, items: { text: string }[]) => (items.length ? `<p style="margin:6px 0 2px"><b>${title}</b></p><ul style="margin:0">${items.map((i) => `<li>${esc(i.text)}</li>`).join('')}</ul>` : '');
   const html = layout(
     `Standup — ${localDate()}`,
-    `<p>${esc(b.summary)}</p>${b.agents.map((a) => `<h3 style="margin:14px 0 4px">${names[a.agentId]}</h3>${sec('Done', a.done)}${sec('Today', a.today)}${sec('Needs you', a.needsYou)}`).join('')}
+    `<p>${esc(b.summary)}</p>${b.agents.map((a) => `<h3 style="margin:14px 0 4px">${names[a.agentId]}</h3>${a.needsYou.length + a.done.length + a.today.length ? `${sec('Needs you', a.needsYou)}${sec('Done', a.done)}${sec('Today', a.today)}` : '<p style="color:#666">Nothing to report today.</p>'}`).join('')}
      ${b.wasteReductionIdeas.length ? `<h3>Waste-reduction ideas</h3><ul>${b.wasteReductionIdeas.map((w) => `<li>${esc(w.text)}</li>`).join('')}</ul>` : ''}
      <p><a href="${esc(link)}/inbox">Open the Inbox</a> · Briefing: ${mode === 'ai' ? 'AI' : `rule-based (${esc(reason)})`}</p>`,
   );
-  const text = `${b.summary}\n\n${b.agents.map((a) => `${names[a.agentId]}\n${[...a.needsYou.map((i) => `! ${i.text}`), ...a.done.map((i) => `✓ ${i.text}`), ...a.today.map((i) => `→ ${i.text}`)].join('\n')}`).join('\n\n')}\n\n${link}/inbox`;
+  const text = `${b.summary}\n\n${b.agents.map((a) => `${names[a.agentId]}\n${[...a.needsYou.map((i) => `! ${i.text}`), ...a.done.map((i) => `✓ ${i.text}`), ...a.today.map((i) => `→ ${i.text}`)].join('\n') || 'Nothing to report today.'}`).join('\n\n')}\n\n${link}/inbox`;
   return { subject: `StockPilot standup ${localDate()}${b.agents.some((a) => a.needsYou.length) ? ' — decisions waiting' : ''}`, html, text };
 }
 

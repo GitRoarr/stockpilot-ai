@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { config, setConfig } from '../apps/api/src/config.js';
 import { db, openDb, setDb } from '../apps/api/src/db/sqlite.js';
 import { seedDemo } from '../apps/api/src/db/seed/demo.js';
-import { setLlmClient } from '../apps/api/src/agents/llm/gateway.js';
+import { setBreakerEnabled, setLlmClient } from '../apps/api/src/agents/llm/gateway.js';
 import { RecordedClient, type Recording } from '../apps/api/src/agents/llm/recorded.js';
 import { approveAction, rejectAction } from '../apps/api/src/agents/actions.js';
 import { answerQuestion, recoverRuns, startRun } from '../apps/api/src/agents/runtime.js';
@@ -193,7 +193,9 @@ function globalGates(): string[] {
 
 async function runScenario(s: Scenario): Promise<{ ok: boolean; problems: string[]; ms: number }> {
   const t0 = Date.now();
-  setConfig({ NODE_ENV: 'test', DATABASE_PATH: ':memory:', DEMO_MODE: true, BREVO_API_KEY: undefined, EMAIL_FROM: undefined, GEMINI_DAILY_BUDGET: 250 });
+  setConfig({ NODE_ENV: 'test', DATABASE_PATH: ':memory:', DEMO_MODE: true, BREVO_API_KEY: undefined, BREVO_SENDER_EMAIL: undefined, EMAIL_FROM: undefined, GEMINI_DAILY_BUDGET: 250 });
+  // Scripted model failures must not carry over between recorded scenarios; live runs keep the breaker.
+  setBreakerEnabled(live);
   setDb(openDb(':memory:'));
   resetClockCache();
   setFetch((async () => {

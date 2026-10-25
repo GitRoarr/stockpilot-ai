@@ -24,10 +24,32 @@ export function llmClient(): LlmClient | null {
   return cached.client;
 }
 
-export function aiAvailable(): { ok: boolean; reason?: 'no_api_key' | 'budget_exhausted' } {
+export function aiAvailable(): { ok: boolean; reason?: 'no_api_key' | 'budget_exhausted' | 'model_cooldown' } {
   if (!llmClient()) return { ok: false, reason: 'no_api_key' };
   if (callsToday() >= config.GEMINI_DAILY_BUDGET) return { ok: false, reason: 'budget_exhausted' };
+  if (breakerOpen()) return { ok: false, reason: 'model_cooldown' };
   return { ok: true };
+}
+
+// Circuit breaker: after repeated failed model requests (timeouts, rate limits, errors) skip the model for a cool-down,
+// so new work starts on the rule-based pipeline at once instead of each run waiting out its own timeouts.
+// Tests and evals switch it off (setBreakerEnabled) so scripted failures in one scenario cannot affect the next.
+const BREAKER_FAILURES = 3;
+const BREAKER_COOLDOWN_MS = 5 * 60_000;
+let breakerEnabled = true;
+let failStreak = 0;
+let openUntil = 0;
+const breakerOpen = () => breakerEnabled && Date.now() < openUntil;
+export function resetBreaker(): void {
+  failStreak = 0;
+  openUntil = 0;
+}
+export function setBreakerEnabled(on: boolean): void {
+  breakerEnabled = on;
+  resetBreaker();
+}
+export function breakerState(): { failStreak: number; openUntil: number } {
+  return { failStreak, openUntil };
 }
 
 export function callsToday(): number {
@@ -73,6 +95,10 @@ async function withModels<T extends { usage?: { tokensIn?: number; tokensOut?: n
     record(null, purpose, 'skipped', 0);
     throw new LlmUnavailable('budget_exhausted', `Daily AI budget of ${config.GEMINI_DAILY_BUDGET} calls reached`);
   }
+  if (breakerOpen()) {
+    record(null, purpose, 'skipped', 0);
+    throw new LlmUnavailable('model_cooldown', `Model paused after ${BREAKER_FAILURES} failed requests; retrying after a short cool-down`);
+  }
   const models = [config.GEMINI_MODEL, config.GEMINI_FALLBACK_MODEL];
   let lastErr: unknown;
   for (let m = 0; m < models.length; m++) {
@@ -85,6 +111,7 @@ async function withModels<T extends { usage?: { tokensIn?: number; tokensOut?: n
       try {
         const result = await call(client, model);
         record(model, purpose, 'ok', Date.now() - t0, result.usage);
+        failStreak = 0;
         return { result, model };
       } catch (e) {
         lastErr = e;
@@ -99,6 +126,7 @@ async function withModels<T extends { usage?: { tokensIn?: number; tokensOut?: n
   }
   const st = statusOf(lastErr);
   const reason = st === 429 ? 'rate_limited' : st === 408 ? 'timeout' : st === 404 || st === 403 ? 'model_unavailable' : 'model_error';
+  if (breakerEnabled && ++failStreak >= BREAKER_FAILURES) openUntil = Date.now() + BREAKER_COOLDOWN_MS;
   throw new LlmUnavailable(reason, (lastErr as Error)?.message ?? 'model call failed');
 }
 

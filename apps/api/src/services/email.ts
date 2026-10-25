@@ -1,6 +1,6 @@
 import { config } from '../config.js';
 import { db } from '../db/sqlite.js';
-import { brevoConfigured, sendBrevo } from '../integrations/brevo.js';
+import { brevoConfigured, senderEmail, sendBrevo } from '../integrations/brevo.js';
 import { enqueue } from '../jobs/queue.js';
 import { RetryableError, registerJob } from '../jobs/worker.js';
 import { audit, notify, publish, SYSTEM } from '../lib/events.js';
@@ -26,10 +26,10 @@ export type EmailRow = {
   sent_at: string | null;
 };
 
-/** Demo mode: every supplier email goes to SUPPLIER_EMAIL_OVERRIDE (default EMAIL_FROM) — SRS SAF-6. */
+/** Demo mode: every supplier email goes to SUPPLIER_EMAIL_OVERRIDE (default: the sender address) — SRS SAF-6. */
 export function supplierRecipient(dbEmail: string): string {
   if (!config.DEMO_MODE) return dbEmail;
-  return config.SUPPLIER_EMAIL_OVERRIDE ?? config.EMAIL_FROM ?? dbEmail;
+  return config.SUPPLIER_EMAIL_OVERRIDE ?? senderEmail() ?? dbEmail;
 }
 
 export function queueEmail(e: {
@@ -48,7 +48,7 @@ export function queueEmail(e: {
     if (existing) return existing.id;
   }
   // Demo mode never emails the reserved .example addresses of the seed: they go to the demo inbox instead.
-  if (config.DEMO_MODE && /\.example$/i.test(e.to)) e = { ...e, to: config.SUPPLIER_EMAIL_OVERRIDE ?? config.EMAIL_FROM ?? e.to };
+  if (config.DEMO_MODE && /\.example$/i.test(e.to)) e = { ...e, to: config.SUPPLIER_EMAIL_OVERRIDE ?? senderEmail() ?? e.to };
   const eid = id('eml');
   db().run(
     `INSERT INTO email_messages (id, kind, to_email, to_name, subject, html, text, status, related_type, related_id, idempotency_key, created_at)
@@ -96,7 +96,7 @@ function finish(email: EmailRow, outcome: Outcome): void {
 registerJob('email.send', async ({ emailId }: { emailId: string }, job) => {
   const email = db().get<EmailRow>(`SELECT * FROM email_messages WHERE id = ?`, emailId);
   if (!email || email.status === 'sent') return;
-  if (!brevoConfigured()) return finish(email, { status: 'not_configured', error: 'BREVO_API_KEY or EMAIL_FROM not set' });
+  if (!brevoConfigured()) return finish(email, { status: 'not_configured', error: 'BREVO_API_KEY or BREVO_SENDER_EMAIL not set' });
   const r = await sendBrevo({ to: email.to_email, toName: email.to_name, subject: email.subject, html: email.html, text: email.text });
   if (r.ok) return finish(email, { status: 'sent', messageId: r.messageId });
   // Transient errors are retried; PO and dispute emails are never re-sent after a provider 2xx (handled by status check above).
@@ -129,7 +129,7 @@ export function layout(title: string, body: string): string {
 <div style="max-width:640px;margin:auto;background:#fff;border-radius:10px;padding:24px;border:1px solid #e5e2d9">
 <p style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#2f6f4f;margin:0">StockPilot AI</p>
 <h2 style="margin:6px 0 16px">${esc(title)}</h2>${body}
-<p style="font-size:11px;color:#777;margin-top:24px">Illustrative demo data — not verified market data. Sent by StockPilot AI on behalf of the restaurant.</p>
+<p style="font-size:11px;color:#777;margin-top:24px">Sent by StockPilot AI on behalf of the restaurant.</p>
 </div></body></html>`;
 }
 

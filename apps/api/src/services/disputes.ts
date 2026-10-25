@@ -116,7 +116,7 @@ function disputeEmail(d: DisputeRow, link: string) {
      <p><b>Total credit requested: $${d.amount_claimed.toFixed(2)}</b></p>
      <p><a href="${esc(link)}" style="display:inline-block;background:#2f6f4f;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">Accept or reject this request</a></p>`,
   );
-  const text = `${d.email_body}\n\n${f.variances.map((v) => `- ${v.description}: $${v.amount.toFixed(2)}`).join('\n')}\nTotal: $${d.amount_claimed.toFixed(2)}\n\nRespond: ${link}\n\n[Illustrative demo data]`;
+  const text = `${d.email_body}\n\n${f.variances.map((v) => `- ${v.description}: $${v.amount.toFixed(2)}`).join('\n')}\nTotal: $${d.amount_claimed.toFixed(2)}\n\nRespond: ${link}`;
   return { subject: d.email_subject ?? 'Credit request', html, text };
 }
 
@@ -202,7 +202,8 @@ export function disputeDetail(did: string) {
   const d = getDispute(did);
   const f = facts(d.invoice_id);
   const emails = db().all<any>(`SELECT id, status, to_email, subject, text, error, created_at FROM email_messages WHERE related_type = 'dispute' AND related_id = ? ORDER BY created_at`, did);
-  return { ...d, supplier: f.supplier, invoiceNumber: f.invoiceNumber, poNumber: f.poNumber, variances: f.variances, emails };
+  const poId = db().get<{ purchase_order_id: string | null }>(`SELECT purchase_order_id FROM invoices WHERE id = ?`, d.invoice_id)?.purchase_order_id ?? null;
+  return { ...d, supplier: f.supplier, invoiceNumber: f.invoiceNumber, invoiceTotal: f.invoiceTotal, poNumber: f.poNumber, poId, variances: f.variances, emails };
 }
 
 export function listDisputes() {

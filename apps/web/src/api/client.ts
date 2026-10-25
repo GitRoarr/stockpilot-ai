@@ -11,6 +11,9 @@ export class ApiFailure extends Error {
   }
 }
 
+/** Set while a data reset runs: the reset ends all sessions, and the page signs out on its own when it finishes. */
+export const authRedirect = { paused: false };
+
 /** Typed fetch wrapper. Sends the custom header that state-changing routes require (NFR-SEC-3). */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const isForm = init.body instanceof FormData;
@@ -22,7 +25,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const body = res.status === 204 ? undefined : await res.json().catch(() => undefined);
   if (!res.ok) {
     const err = (body as ApiError | undefined)?.error;
-    if (res.status === 401 && !path.startsWith('/auth') && !path.startsWith('/me')) window.dispatchEvent(new Event('sp:unauthenticated'));
+    if (res.status === 401 && !path.startsWith('/auth') && !path.startsWith('/me') && !authRedirect.paused) window.dispatchEvent(new Event('sp:unauthenticated'));
     throw new ApiFailure(res.status, err?.code ?? 'ERROR', err?.message ?? `Request failed (${res.status})`, err?.details);
   }
   return body as T;

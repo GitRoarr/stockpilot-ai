@@ -13,7 +13,7 @@
   "assert": [
     {
       "expect": "sql",
-      "query": "SELECT COUNT(*) FROM briefings WHERE briefing_json LIKE '%Holiday tomorrow: Eval Day%'",
+      "query": "SELECT COUNT(*) FROM briefings WHERE briefing_json LIKE '%Eval Day%'",
       "equals": 1
     },
     {

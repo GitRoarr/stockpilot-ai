@@ -102,6 +102,19 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
     const m = postMessage(ensureThread(type, id), { type: 'user', id: u.id }, b.body, { startRuns: { id: u.id, role: u.role } });
     return m;
   });
+  // Human team members with workload and last activity (read-only; there is no invite/member management API).
+  app.get('/team/members', async (req) => {
+    requireUser(req);
+    return db().all(
+      `SELECT u.id, u.name, u.email, u.role, u.created_at AS createdAt,
+         (SELECT COUNT(*) FROM tasks t WHERE t.assignee_type = 'user' AND t.assignee_id = u.id AND t.status NOT IN ('done','cancelled')) AS openTasks,
+         (SELECT COUNT(*) FROM tasks t WHERE t.assignee_type = 'user' AND t.assignee_id = u.id AND t.status = 'done') AS doneTasks,
+         (SELECT COUNT(*) FROM audit_events a WHERE a.actor_type = 'user' AND a.actor_id = u.id) AS actions,
+         (SELECT MAX(at) FROM audit_events a WHERE a.actor_type = 'user' AND a.actor_id = u.id) AS lastActiveAt,
+         (SELECT action FROM audit_events a WHERE a.actor_type = 'user' AND a.actor_id = u.id ORDER BY at DESC LIMIT 1) AS lastAction
+       FROM users u ORDER BY CASE u.role WHEN 'owner' THEN 0 WHEN 'chef' THEN 1 ELSE 2 END, u.name`,
+    );
+  });
   // "Message the team" box → Pilot unless another agent is @mentioned (FR-057).
   app.post('/team/messages', async (req) => {
     const u = requireUser(req);

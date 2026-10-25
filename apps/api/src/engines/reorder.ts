@@ -15,6 +15,8 @@ export type ReorderInput = {
   onOrder: number;
   perishable: boolean;
   shelfLifeDays: number;
+  /** Optional minimum stock the restaurant always wants usable (reorder level); a floor for safety stock. */
+  reorderLevel?: number | null;
 };
 
 export type ReorderTrace = {
@@ -24,6 +26,7 @@ export type ReorderTrace = {
   avgDaily: number;
   safetyDaysTerm: number;
   safetyStatTerm: number;
+  reorderLevel: number | null;
   z: number;
   sigmaH: number;
   safety: number;
@@ -44,11 +47,13 @@ export function computeNeed(i: ReorderInput): ReorderTrace {
   const z = zFor(i.serviceLevel);
   const safetyDaysTerm = i.safetyDays * avgDaily;
   const safetyStatTerm = z * i.sigmaH;
-  const safety = Math.max(safetyDaysTerm, safetyStatTerm);
+  const reorderLevel = i.reorderLevel && i.reorderLevel > 0 ? i.reorderLevel : null;
+  const safety = Math.max(safetyDaysTerm, safetyStatTerm, reorderLevel ?? 0);
   const net = demandH + safety - i.usable - i.onOrder;
   const shelfCap = i.perishable ? avgDaily * i.shelfLifeDays + safety : null;
   let need = Math.max(0, net);
   const flags: string[] = [];
+  if (reorderLevel !== null && reorderLevel > Math.max(safetyDaysTerm, safetyStatTerm)) flags.push('reorder_level_floor');
   if (shelfCap !== null && need > shelfCap) {
     need = shelfCap;
     flags.push('capped_by_shelf_life');
@@ -66,6 +71,7 @@ export function computeNeed(i: ReorderInput): ReorderTrace {
     avgDaily: r1(avgDaily),
     safetyDaysTerm: r1(safetyDaysTerm),
     safetyStatTerm: r1(safetyStatTerm),
+    reorderLevel,
     z,
     sigmaH: r1(i.sigmaH),
     safety: r1(safety),

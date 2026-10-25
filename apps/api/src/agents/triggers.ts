@@ -68,12 +68,23 @@ export function wireTriggers(): void {
     const resp = db().get<{ untrusted_note: string | null }>(`SELECT untrusted_note FROM supplier_responses WHERE id = ?`, String(p.responseId));
     startRun({
       agentId: 'buyer',
-      goal: `Supplier responded to ${po.number}: replan any shortfall and resolve substitutions.`,
+      goal: `Supplier responded to ${po.number}: replan any shortfall (optimize_order with scope "shortage" and this poId, then draft_purchase_orders, then send_purchase_order for each new order so it reaches the Inbox for approval) and, for each substitution proposal in substitutionActions, ask the chef with ask_human, passing its actionId and recommending "No" when it is above the price tolerance.`,
       trigger: 'supplier.responded',
       playbook: 'supplier_response',
       runKey: `response:${p.responseId}`,
       externalText: Boolean(p.externalText),
-      payload: { poId: po.id, poNumber: po.number, responseId: p.responseId, shortages, substitutionActions: subs, ...(resp?.untrusted_note ? { untrusted_supplier_note: resp.untrusted_note } : {}), linkedType: 'purchase_order', linkedId: po.id },
+      payload: {
+        poId: po.id,
+        poNumber: po.number,
+        responseId: p.responseId,
+        shortages,
+        substitutionActions: subs,
+        // What each substitution proposal is, so the agent can ask a meaningful question (IDs alone are not enough).
+        substitutions: (subs as string[]).map((aid) => {
+          const a = db().get<{ summary: string; args_json: string }>(`SELECT summary, args_json FROM agent_actions WHERE id = ?`, aid);
+          return { actionId: aid, summary: a?.summary, aboveTolerance: Boolean(a && JSON.parse(a.args_json).flagged) };
+        }),
+        ...(resp?.untrusted_note ? { untrusted_supplier_note: resp.untrusted_note } : {}), linkedType: 'purchase_order', linkedId: po.id },
       threadId: ensureThread('purchase_order', po.id),
     });
   });
@@ -85,7 +96,7 @@ export function wireTriggers(): void {
     if (!line || line.need <= 0) return;
     startRun({
       agentId: 'buyer',
-      goal: `The substitute on ${po.number} was rejected: cover the shortfall from another supplier.`,
+      goal: `The substitute on ${po.number} was rejected: cover the shortfall from another supplier (optimize_order with scope "shortage", draft_purchase_orders, then send_purchase_order so the new order waits for approval).`,
       trigger: 'substitution.rejected',
       playbook: 'supplier_response',
       runKey: `subst-rejected:${p.poLineId}`,

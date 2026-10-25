@@ -151,14 +151,14 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
   // Demo controls (DEMO_MODE only).
   app.post('/admin/reset-demo', async (req) => {
     requireRole(req, 'owner');
-    if (!config.DEMO_MODE) throw new AppError(403, 'FORBIDDEN', 'Demo controls are disabled');
+    if (!config.DEMO_MODE) throw new AppError(403, 'FORBIDDEN', 'Data reset and clock controls are disabled on this server');
     const { seedDemo } = await import('../db/seed/demo.js');
     const b = z.object({ offline: z.boolean().optional() }).parse(req.body ?? {});
     return seedDemo({ offline: b.offline });
   });
   app.post('/admin/clock', async (req) => {
     const u = requireRole(req, 'owner', 'chef');
-    if (!config.DEMO_MODE) throw new AppError(403, 'FORBIDDEN', 'Demo controls are disabled');
+    if (!config.DEMO_MODE) throw new AppError(403, 'FORBIDDEN', 'Data reset and clock controls are disabled on this server');
     const b = z.union([z.object({ advanceMinutes: z.number().int().min(1).max(7 * 24 * 60) }), z.object({ reset: z.literal(true) })]).parse(req.body);
     setClockOffsetMs('reset' in b ? 0 : clockOffsetMs() + b.advanceMinutes * 60_000);
     audit({ type: 'user', id: u.id }, 'demo.clock', 'settings', 'clock', { meta: { offsetMs: clockOffsetMs() } });

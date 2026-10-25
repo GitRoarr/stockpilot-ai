@@ -32,7 +32,7 @@ export const SettingsSchema = z.object({
 export type Settings = z.infer<typeof SettingsSchema>;
 
 export const DEFAULT_SETTINGS: Settings = {
-  restaurantName: 'Harbor & Vine Bistro (demo)',
+  restaurantName: 'Harbor & Vine Bistro',
   latitude: 37.7749,
   longitude: -122.4194,
   country: 'US',

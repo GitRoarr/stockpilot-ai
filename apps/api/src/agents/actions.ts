@@ -194,5 +194,21 @@ export function inbox(user: { role: Role }) {
     .all<any>(`SELECT q.*, g.display_name AS agent_name FROM questions q LEFT JOIN agents g ON g.id = q.agent_id WHERE q.status = 'open' ORDER BY q.created_at DESC`)
     .map((q) => ({ id: q.id, agentId: q.agent_id, agentName: q.agent_name, text: q.text, options: json(q.options_json, []), recommended: q.recommended, deadline: q.deadline, actionId: q.action_id, runId: q.run_id, taskId: q.task_id, createdAt: q.created_at }));
   const agreements = listAgreements().filter((x) => x.status === 'proposed');
-  return { proposals, questions, agreements, counts: { proposals: proposals.length, questions: questions.length, agreements: agreements.length } };
+  // History for the Inbox's "Completed" and "Supplier updates" views (read-only).
+  const completed = db().all<any>(
+    `SELECT a.id, a.agent_id AS agentId, g.display_name AS agentName, a.tool, a.summary, a.status, a.policy_decision AS policyDecision, a.reject_reason AS rejectReason, a.run_id AS runId, a.created_at AS createdAt, a.decided_at AS decidedAt, u.name AS approverName
+     FROM agent_actions a LEFT JOIN agents g ON g.id = a.agent_id LEFT JOIN users u ON u.id = a.approver_id
+     WHERE a.status <> 'proposed' ORDER BY COALESCE(a.decided_at, a.created_at) DESC LIMIT 30`,
+  );
+  const supplierUpdates = db()
+    .all<{ id: string; po_id: string; number: string; supplier: string; lines_json: string; eta: string | null; untrusted_note: string | null; received_at: string; version: number }>(
+      `SELECT r.id, r.purchase_order_id AS po_id, p.number, s.name AS supplier, r.lines_json, r.eta, r.untrusted_note, r.received_at, r.version
+       FROM supplier_responses r JOIN purchase_orders p ON p.id = r.purchase_order_id JOIN suppliers s ON s.id = p.supplier_id ORDER BY r.received_at DESC LIMIT 20`,
+    )
+    .map((r) => {
+      const lines = json<{ action: string }[]>(r.lines_json, []);
+      const count = (k: string) => lines.filter((l) => l.action === k).length;
+      return { id: r.id, poId: r.po_id, number: r.number, supplier: r.supplier, version: r.version, receivedAt: r.received_at, eta: r.eta, untrustedNote: r.untrusted_note, confirmed: count('confirm'), reduced: count('reduce'), unavailable: count('unavailable'), substituted: count('substitute') };
+    });
+  return { proposals, questions, agreements, completed, supplierUpdates, counts: { proposals: proposals.length, questions: questions.length, agreements: agreements.length } };
 }

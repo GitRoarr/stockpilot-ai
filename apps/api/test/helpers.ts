@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { setConfig } from '../src/config.js';
 import { openDb, setDb } from '../src/db/sqlite.js';
-import { setLlmClient } from '../src/agents/llm/gateway.js';
+import { setBreakerEnabled, setLlmClient } from '../src/agents/llm/gateway.js';
 import type { LlmClient } from '../src/agents/llm/types.js';
 import { setFetch } from '../src/integrations/http.js';
 import { resetClockCache } from '../src/lib/util.js';
@@ -12,10 +12,11 @@ export type Session = { cookie: string; role: string };
 
 /** Fresh in-memory database, offline (external fetches fail), optional recorded model. */
 export async function setup(opts: { llm?: LlmClient | null; seed?: boolean } = {}): Promise<FastifyInstance> {
-  setConfig({ NODE_ENV: 'test', DATABASE_PATH: ':memory:', GEMINI_API_KEY: undefined, BREVO_API_KEY: undefined, EMAIL_FROM: undefined, SESSION_SECRET: 'x'.repeat(40), DEMO_MODE: true });
+  setConfig({ NODE_ENV: 'test', DATABASE_PATH: ':memory:', GEMINI_API_KEY: undefined, BREVO_API_KEY: undefined, BREVO_SENDER_EMAIL: undefined, BREVO_SENDER_NAME: undefined, SUPPLIER_EMAIL_OVERRIDE: undefined, EMAIL_FROM: undefined, SESSION_SECRET: 'x'.repeat(40), DEMO_MODE: true });
   setDb(openDb(':memory:'));
   resetClockCache();
   setLlmClient(opts.llm === undefined ? null : opts.llm);
+  setBreakerEnabled(false);
   setFetch((async () => {
     throw new Error('network disabled in tests');
   }) as unknown as typeof fetch);
@@ -25,7 +26,7 @@ export async function setup(opts: { llm?: LlmClient | null; seed?: boolean } = {
 }
 
 export async function login(app: FastifyInstance, email: string): Promise<Session> {
-  const r = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email, password: 'stockpilot-demo' }, headers: { 'x-stockpilot': '1' } });
+  const r = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email, password: 'harborvine2026' }, headers: { 'x-stockpilot': '1' } });
   if (r.statusCode !== 200) throw new Error(`login failed ${r.statusCode} ${r.body}`);
   const raw = r.headers['set-cookie'];
   const c = (Array.isArray(raw) ? raw[0] : String(raw)).split(';')[0];

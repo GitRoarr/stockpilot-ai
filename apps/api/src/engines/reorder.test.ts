@@ -71,3 +71,16 @@ describe('expiryRisks (FR-035)', () => {
     expect(r).toEqual([]);
   });
 });
+
+describe('reorder level (minimum stock entered by the user)', () => {
+  it('raises safety stock to the reorder level when it is higher, and is ignored when lower', () => {
+    const base = { ingredientId: 'x', demandByDay: [10, 10, 10], H: 3, leadTimeDays: 1, safetyDays: 1, serviceLevel: 0.95, sigmaH: 0, usable: 5, onOrder: 0, perishable: false, shelfLifeDays: 30 };
+    const high = computeNeed({ ...base, reorderLevel: 25 });
+    expect(high.safety).toBe(25);
+    expect(high.need).toBe(30 + 25 - 5);
+    expect(high.flags).toContain('reorder_level_floor');
+    const low = computeNeed({ ...base, reorderLevel: 4 });
+    expect(low.safety).toBe(10);
+    expect(low.flags).not.toContain('reorder_level_floor');
+  });
+});

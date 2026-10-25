@@ -20,6 +20,7 @@ export type IngredientRow = {
   safety_days: number;
   service_level: number;
   max_overbuy_days: number;
+  reorder_level: number | null;
   active: number;
 };
 export type SupplierRow = {
@@ -113,6 +114,7 @@ export function computeNeeds(fc: ForecastView = getForecast(14)): NeedRow[] {
       onOrder: ordered.get(ing.id) ?? 0,
       perishable: Boolean(ing.perishable),
       shelfLifeDays: ing.shelf_life_days,
+      reorderLevel: ing.reorder_level,
     });
     const min = minOverrides.get(ing.id);
     const t: NeedRow['trace'] = { ...trace, model: modelsFor(fc, recipe, ing.id) };
@@ -176,11 +178,13 @@ export type PlanRecord = {
   explanations: Record<string, string>;
   fallbackReason?: string;
   excludedByAgreements: string[];
+  /** Ingredients with a need but no feasible supplier offer (not part of the optimisation). */
+  unsourced: { ingredientId: string; name: string; need: number }[];
   durationMs: number;
 };
 
 /** Builds the optimiser input from needs: feasible offers, caps, agreements (exclude/prefer/rounding). */
-export function optimiserInput(needs: NeedRow[], opts: PlanOptions): { input: OptimiserInput; baselineInput: OptimiserInput; excluded: string[] } {
+export function optimiserInput(needs: NeedRow[], opts: PlanOptions): { input: OptimiserInput; baselineInput: OptimiserInput; excluded: string[]; unsourced: { ingredientId: string; name: string; need: number }[] } {
   const today = localDate();
   const time = localTime();
   const sups = suppliers();
@@ -226,9 +230,15 @@ export function optimiserInput(needs: NeedRow[], opts: PlanOptions): { input: Op
   };
 
   const planNeeds: NeedInput[] = [];
+  // A full plan should not be blocked by an ingredient nobody sells yet (e.g. just added): report it instead.
+  const unsourced: { ingredientId: string; name: string; need: number }[] = [];
   for (const n of needs) {
     const need = override ? override.get(n.ingredientId) : n.trace.need;
     if (!need || need <= 0) continue;
+    if (!override && !offerRows.some((o) => o.ingredient_id === n.ingredientId)) {
+      unsourced.push({ ingredientId: n.ingredientId, name: n.name, need: Math.round(need * 10) / 10 });
+      continue;
+    }
     const ing = ingMap.get(n.ingredientId)!;
     const smallestPack = Math.min(...offerRows.filter((o) => o.ingredient_id === n.ingredientId).map((o) => o.pack_size), Infinity);
     let cap = ing.perishable && n.trace.shelfCap !== null ? n.trace.shelfCap - need : ing.max_overbuy_days * n.trace.avgDaily;
@@ -258,13 +268,14 @@ export function optimiserInput(needs: NeedRow[], opts: PlanOptions): { input: Op
     input: { needs: planNeeds, offers: kept.map(toOffer), suppliers: supplierInputs },
     baselineInput: { needs: planNeeds, offers: offerRows.map((o) => ({ ...toOffer(o), objectiveFactor: 1 })), suppliers: supplierInputs },
     excluded,
+    unsourced,
   };
 }
 
 export async function createPlan(opts: PlanOptions, fc?: ForecastView): Promise<PlanRecord> {
   const t0 = Date.now();
   const needs = computeNeeds(fc);
-  const { input, baselineInput, excluded } = optimiserInput(needs, opts);
+  const { input, baselineInput, excluded, unsourced } = optimiserInput(needs, opts);
   const solution = await optimise(input);
   const baseline = baselinePlan(baselineInput);
   const saving = round2(baseline.total - solution.total);
@@ -283,6 +294,7 @@ export async function createPlan(opts: PlanOptions, fc?: ForecastView): Promise<
     explanations,
     fallbackReason: solution.fallbackReason,
     excludedByAgreements: excluded,
+    unsourced,
     durationMs: Date.now() - t0,
   };
   db().run(
@@ -291,7 +303,7 @@ export async function createPlan(opts: PlanOptions, fc?: ForecastView): Promise<
     rec.id,
     rec.createdAt,
     rec.trigger,
-    JSON.stringify({ needs: rec.needs, excludedByAgreements: excluded, input: input.needs, durationMs: rec.durationMs }),
+    JSON.stringify({ needs: rec.needs, excludedByAgreements: excluded, unsourced, input: input.needs, durationMs: rec.durationMs }),
     JSON.stringify(solution),
     JSON.stringify(baseline),
     solution.method,
@@ -308,7 +320,7 @@ export async function createPlan(opts: PlanOptions, fc?: ForecastView): Promise<
 export function getPlan(planId: string): PlanRecord | undefined {
   const r = db().get<any>(`SELECT * FROM plans WHERE id = ?`, planId);
   if (!r) return undefined;
-  const n = json<{ needs: NeedRow[]; excludedByAgreements: string[]; durationMs: number }>(r.needs_json, { needs: [], excludedByAgreements: [], durationMs: 0 });
+  const n = json<{ needs: NeedRow[]; excludedByAgreements: string[]; unsourced?: PlanRecord['unsourced']; durationMs: number }>(r.needs_json, { needs: [], excludedByAgreements: [], durationMs: 0 });
   return {
     id: r.id,
     createdAt: r.created_at,
@@ -323,6 +335,7 @@ export function getPlan(planId: string): PlanRecord | undefined {
     explanations: json(r.explanations_json, {}),
     fallbackReason: r.fallback_reason ?? undefined,
     excludedByAgreements: n.excludedByAgreements,
+    unsourced: n.unsourced ?? [],
     durationMs: n.durationMs,
   };
 }

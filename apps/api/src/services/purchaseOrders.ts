@@ -123,7 +123,7 @@ export function recalcPo(poId: string): PoRow {
 
 /**
  * Draft POs per supplier from an optimiser plan (FR-070). Quantities come only from the plan (FR-054).
- * A full re-plan supersedes earlier agent drafts that no human has edited.
+ * A full re-plan supersedes earlier unapproved agent orders (and their approval requests) that no human has edited.
  */
 export function draftFromPlan(planId: string, actor: Actor, opts: { parentPoId?: string; supersede?: boolean } = {}): PoRow[] {
   const plan = getPlan(planId);
@@ -135,11 +135,14 @@ export function draftFromPlan(planId: string, actor: Actor, opts: { parentPoId?:
   return db().tx(() => {
     if (opts.supersede) {
       const old = db().all<{ id: string; number: string }>(
-        `SELECT p.id, p.number FROM purchase_orders p WHERE p.status = 'draft' AND p.created_by_type = 'agent'
+        // Still-unapproved agent orders (draft or awaiting approval), not follow-ups for an earlier delivery and not
+        // edited by a person, are replaced so a second morning plan never leaves two competing sets in the Inbox.
+        `SELECT p.id, p.number FROM purchase_orders p WHERE p.status IN ('draft','pending_approval') AND p.created_by_type = 'agent' AND p.parent_po_id IS NULL
          AND NOT EXISTS (SELECT 1 FROM po_lines l WHERE l.purchase_order_id = p.id AND l.edited_by_user = 1)`,
       );
       for (const o of old) {
         db().run(`UPDATE purchase_orders SET status = 'cancelled', note = 'Superseded by a newer plan', updated_at = ? WHERE id = ?`, nowIso(), o.id);
+        db().run(`UPDATE agent_actions SET status = 'rejected', reject_reason = 'Superseded by a newer plan', decided_at = ? WHERE status = 'proposed' AND json_extract(args_json, '$.poId') = ?`, nowIso(), o.id);
         audit(actor, 'po.superseded', 'purchase_order', o.id);
       }
     }
@@ -314,7 +317,7 @@ function poEmail(po: PoRow, sup: SupplierRow, link: string, reminder: boolean): 
      <p><a href="${esc(link)}" style="display:inline-block;background:#2f6f4f;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">Confirm, short or substitute items</a></p>
      <p style="font-size:12px;color:#666">No login needed. The link is valid for 7 days and only shows this order.</p>${po.note ? `<p>Note: ${esc(po.note)}</p>` : ''}`,
   );
-  const text = `${subject}\n\nDelivery: ${po.delivery_date}\n${lines.map((l) => `${l.sku} ${l.ingredient}: ${l.packs} x ${l.pack_size} ${l.unit} @ $${l.unit_price.toFixed(2)} = $${l.line_total.toFixed(2)}`).join('\n')}\nTotal: $${po.total.toFixed(2)}\n\nConfirm or report changes: ${link}\n\n[Illustrative demo data]`;
+  const text = `${subject}\n\nDelivery: ${po.delivery_date}\n${lines.map((l) => `${l.sku} ${l.ingredient}: ${l.packs} x ${l.pack_size} ${l.unit} @ $${l.unit_price.toFixed(2)} = $${l.line_total.toFixed(2)}`).join('\n')}\nTotal: $${po.total.toFixed(2)}\n\nConfirm or report changes: ${link}`;
   return { subject, html, text };
 }
 
@@ -430,6 +433,15 @@ export function poDetail(poId: string) {
     plan: plan ? { id: plan.id, total: plan.solution.total, baselineTotal: plan.baseline.total, saving: plan.saving, method: plan.method, fallbackReason: plan.fallbackReason, explanations: plan.explanations, baseline: plan.baseline, violations: plan.violations } : null,
     responses,
     emails,
+    // Order history: every audited change to this PO or its lines, with who made it.
+    history: db().all<any>(
+      `SELECT a.id, a.at, a.action, a.actor_type AS actorType, COALESCE(u.name, g.display_name, a.actor_type) AS actor, a.meta_json AS meta
+       FROM audit_events a LEFT JOIN users u ON a.actor_type = 'user' AND u.id = a.actor_id LEFT JOIN agents g ON a.actor_type = 'agent' AND g.id = a.actor_id
+       WHERE (a.entity_type = 'purchase_order' AND a.entity_id = ?) OR (a.entity_type = 'po_line' AND a.entity_id IN (SELECT id FROM po_lines WHERE purchase_order_id = ?))
+       ORDER BY a.at`,
+      poId,
+      poId,
+    ),
     receipts,
     requiredRole: requiredRoleFor(po.total),
   };
