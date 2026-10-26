@@ -7,6 +7,7 @@ import { Thread } from '../components/Thread';
 import { Bot, Check, Clock, Info, ListChecks, MessageSquare, Minus, Pause, Play, ShieldCheck, Sparkles, Timer, Users } from 'lucide-react';
 import { ago, Badge, Button, Card, cx, dt, Empty, inputCls, Kpi, Modal, num, PageHeader, Q, RoleLink, SearchInput, Status, Table, Tabs, usd, type Tone } from '../components/ui';
 import { AgentAvatar } from '../components/AgentAvatar';
+import { toolLabel } from '../lib/agentTools';
 
 // Team page (FR-112, FR-120): AI agents (profiles, permissions, status, tasks, runs, scorecards), the people on the
 // team with their roles and workload, and team chat (FR-057).
@@ -183,33 +184,6 @@ function People({ me }: { me: Me }) {
   );
 }
 
-// Plain-language names for manifest tools; the code name is kept in the tooltip for traceability.
-const TOOL_LABEL: Record<string, string> = {
-  add_demand_event: 'Add demand events',
-  ask_human: 'Ask you a question',
-  delegate_task: 'Delegate to teammates',
-  draft_purchase_orders: 'Draft purchase orders',
-  get_backtest_report: 'Check forecast accuracy',
-  get_forecast: 'Read the forecast',
-  get_inventory_status: 'Check stock levels',
-  get_invoice_match: 'Match invoices',
-  get_reorder_plan: 'Read reorder needs',
-  get_savings_summary: 'Read savings',
-  get_supplier_offers: 'Compare supplier offers',
-  get_team_status: 'Check team status',
-  open_dispute: 'Open disputes',
-  optimize_order: 'Optimise orders',
-  post_message: 'Post in team chat',
-  propose_po_change: 'Propose order changes',
-  propose_working_agreement: 'Propose standing rules',
-  publish_briefing: 'Publish the standup',
-  record_credit: 'Record supplier credits',
-  refresh_context: 'Refresh weather & holidays',
-  send_dispute_email: 'Email credit requests',
-  send_purchase_order: 'Send orders to suppliers',
-  send_supplier_followup: 'Follow up with suppliers',
-  simulate_scenario: 'Run what-if scenarios',
-};
 
 function AgentCard({ a, owner, onOpen }: { a: any; owner: boolean; onOpen: () => void }) {
   const qc = useQueryClient();
@@ -248,7 +222,7 @@ function AgentCard({ a, owner, onOpen }: { a: any; owner: boolean; onOpen: () =>
       <div className="mt-1.5 flex flex-wrap gap-1">
         {a.tools.map((t: string) => (
           <Badge key={t} tone={approve.includes(t) ? 'amber' : 'gray'} title={`${t} — ${approve.includes(t) ? 'needs approval (autonomy policy)' : 'runs on its own'}`}>
-            {TOOL_LABEL[t] ?? t.replace(/_/g, ' ')}
+            {toolLabel(t)}
           </Badge>
         ))}
       </div>

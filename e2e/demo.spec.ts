@@ -25,7 +25,7 @@ test('morning run → approve → supplier shortage → replan → receive → i
 
   // E2E-2: morning run with no key — live trace, then the standup.
   await page.getByRole('button', { name: 'Run morning plan' }).first().click();
-  await expect(page.getByText('Pilot · manual')).toBeVisible();
+  await expect(page.getByText('Pilot · started manually')).toBeVisible();
   await expect(page.getByText('completed', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/Morning run complete/).first()).toBeVisible();
   await shot(page, '02-run-trace');

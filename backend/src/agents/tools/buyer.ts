@@ -142,7 +142,7 @@ export const draftPurchaseOrders: ToolDef<{ planId: string }> = {
     const sups = plan.solution.suppliers.map((s) => `${s.name} $${s.total.toFixed(2)}`).join(', ');
     const supplementary = plan.trigger.startsWith('shortage:');
     return {
-      summary: supplementary ? `Create and send supplementary PO for ${plan.trigger.slice(9)} shortfall: ${sups}` : `Draft ${plan.solution.suppliers.length} PO(s): ${sups} (saving $${plan.saving.toFixed(2)} vs preferred suppliers)`,
+      summary: supplementary ? `Create and send supplementary PO for ${plan.trigger.slice(9)} shortfall: ${sups}` : `Draft ${plan.solution.suppliers.length} ${plan.solution.suppliers.length === 1 ? 'purchase order' : 'purchase orders'}: ${sups} (saving $${plan.saving.toFixed(2)} vs preferred suppliers)`,
       facts: { total: plan.solution.total },
     };
   },

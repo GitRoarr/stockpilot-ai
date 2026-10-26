@@ -78,10 +78,10 @@ export function HomePage({ auth = null }: { auth?: AuthMode | null }) {
         <section className="relative overflow-hidden">
           <div aria-hidden className="brand-grid absolute inset-0" />
           <div className="relative mx-auto max-w-6xl px-4 pt-16 text-center sm:px-6 lg:pt-24">
-            <span className="inline-flex items-center rounded-full border border-brand-600/25 bg-brand-50 px-3.5 py-1 text-xs font-medium text-brand-700 dark:text-brand-400">An AI purchasing team for restaurants</span>
+            <span className="inline-flex items-center rounded-full border border-line bg-card px-3.5 py-1 text-xs font-medium text-muted shadow-card">An AI purchasing team for restaurants</span>
             <h1 className="mx-auto mt-6 max-w-5xl text-4xl font-bold leading-[1.06] tracking-tight sm:text-6xl lg:text-7xl">
               Purchasing that plans itself.
-              <span className="block bg-gradient-to-r from-brand-700 via-brand-600 to-brand-500 bg-clip-text pb-1 text-transparent dark:from-brand-400 dark:via-brand-500 dark:to-brand-600">Decisions that stay yours.</span>
+              <span className="block pb-1 text-muted">Decisions that stay yours.</span>
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
               Four AI agents forecast ingredient demand, compare suppliers, draft orders and reconcile invoices every morning. You approve what matters — nothing reaches a supplier without you.
@@ -97,7 +97,7 @@ export function HomePage({ auth = null }: { auth?: AuthMode | null }) {
             <ul className="mx-auto mt-8 flex max-w-3xl flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-muted">
               {['Human approval on every supplier order', 'Numbers from tested engines', 'Runs even without an AI key'].map((t) => (
                 <li key={t} className="flex items-center gap-2">
-                  <Check aria-hidden className="h-4 w-4 text-brand-600" />
+                  <Check aria-hidden className="h-4 w-4 text-ink" />
                   {t}
                 </li>
               ))}
@@ -111,7 +111,7 @@ export function HomePage({ auth = null }: { auth?: AuthMode | null }) {
             {WORKFLOW.map((s, i) => (
               <li key={s} className="flex items-center gap-2">
                 <span className="rounded-full border border-line bg-card px-3 py-1 font-medium shadow-card">{s}</span>
-                {i < WORKFLOW.length - 1 && <ArrowRight aria-hidden className="h-3.5 w-3.5 text-brand-600" />}
+                {i < WORKFLOW.length - 1 && <ArrowRight aria-hidden className="h-3.5 w-3.5 text-ink" />}
               </li>
             ))}
           </ol>
@@ -121,9 +121,9 @@ export function HomePage({ auth = null }: { auth?: AuthMode | null }) {
           <SectionHead eyebrow="Platform" title="The whole purchasing loop, in one place" text="From tomorrow’s forecast to the credit on last week’s invoice — each step is handled by an engine or an agent, and each decision is yours." />
           <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {FEATURES.map(([title, text], i) => (
-              <div key={title} className="group relative overflow-hidden rounded-2xl border border-line bg-card p-6 shadow-card transition-colors hover:border-brand-600/40">
-                <span aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-brand-700 to-brand-500 opacity-0 transition-opacity group-hover:opacity-100" />
-                <div className="font-mono text-xs font-medium text-brand-700 dark:text-brand-400">{String(i + 1).padStart(2, '0')}</div>
+              <div key={title} className="group relative overflow-hidden rounded-2xl border border-line bg-card p-6 shadow-card transition-colors hover:border-line-strong">
+                <span aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-ink opacity-0 transition-opacity group-hover:opacity-100" />
+                <div className="font-mono text-xs font-medium text-muted">{String(i + 1).padStart(2, '0')}</div>
                 <h3 className="mt-3 text-base font-semibold tracking-tight">{title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted">{text}</p>
               </div>
@@ -147,7 +147,7 @@ export function HomePage({ auth = null }: { auth?: AuthMode | null }) {
                   <ul className="mt-4 space-y-2 text-sm text-muted">
                     {does.map((d) => (
                       <li key={d} className="flex gap-2">
-                        <Check aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+                        <Check aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-ink" />
                         {d}
                       </li>
                     ))}
@@ -166,7 +166,7 @@ export function HomePage({ auth = null }: { auth?: AuthMode | null }) {
           <div className="mt-14 grid gap-4 md:grid-cols-3">
             {PRINCIPLES.map(([title, text]) => (
               <div key={title} className="rounded-2xl border border-line bg-card p-6 shadow-card">
-                <span aria-hidden className="block h-1 w-10 rounded-full bg-gradient-to-r from-brand-700 to-brand-500" />
+                <span aria-hidden className="block h-1 w-10 rounded-full bg-ink" />
                 <h3 className="mt-5 text-base font-semibold tracking-tight">{title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted">{text}</p>
               </div>
@@ -181,7 +181,7 @@ export function HomePage({ auth = null }: { auth?: AuthMode | null }) {
               <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">See a morning of purchasing, end to end.</h2>
               <p className="mx-auto mt-4 max-w-xl text-white/75">Run the morning plan, approve an order, follow the supplier’s reply and match the invoice — with Harbor &amp; Vine Bistro’s demo data.</p>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <button type="button" onClick={getStarted} className="inline-flex h-12 items-center gap-2 rounded-lg bg-white px-6 text-[15px] font-medium text-brand-900 shadow-card transition-colors hover:bg-brand-50">
+                <button type="button" onClick={getStarted} className="inline-flex h-12 items-center gap-2 rounded-lg bg-white px-6 text-[15px] font-medium text-[#0a0a0a] shadow-card transition-colors hover:bg-white/90">
                   Get started <ArrowRight aria-hidden className="h-4 w-4" />
                 </button>
                 <button type="button" onClick={signIn} className="inline-flex h-12 items-center rounded-lg border border-white/25 px-6 text-[15px] font-medium text-white transition-colors hover:bg-white/10">
@@ -210,7 +210,7 @@ export function HomePage({ auth = null }: { auth?: AuthMode | null }) {
 function SectionHead({ eyebrow, title, text }: { eyebrow: string; title: string; text: string }) {
   return (
     <div className="mx-auto max-w-2xl text-center">
-      <div className="text-xs font-semibold uppercase tracking-wider text-brand-700 dark:text-brand-400">{eyebrow}</div>
+      <div className="text-xs font-semibold uppercase tracking-wider text-muted">{eyebrow}</div>
       <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">{title}</h2>
       <p className="mt-4 text-base leading-relaxed text-muted">{text}</p>
     </div>

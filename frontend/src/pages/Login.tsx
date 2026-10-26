@@ -12,17 +12,17 @@ const ROLES = [
   { role: 'Staff', email: 'leo@harborvine.com', can: 'Receives deliveries and invoices' },
 ] as const;
 
-/** Email/password sign-in plus demo-mode sample accounts; shown in the homepage sign-in dialog. */
-export function SignInForm() {
+/** Whether the server runs in demo mode (sample accounts and sign-up are offered). */
+function useDemoMode() {
+  const health = useQuery({ queryKey: ['health'], queryFn: () => api<{ demoMode: boolean }>('/health'), retry: false });
+  return Boolean(health.data?.demoMode);
+}
+
+/** POST /auth/login and open the app; `busy` names the control that started it (a form or a demo account). */
+function useSignIn() {
   const qc = useQueryClient();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [show, setShow] = useState(false);
-  const [demo, setDemo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const reset = new URLSearchParams(window.location.search).has('reset');
-  const health = useQuery({ queryKey: ['health'], queryFn: () => api<{ demoMode: boolean }>('/health'), retry: false });
   const signIn = async (who: string, pw: string, key: string) => {
     setBusy(key);
     setError(null);
@@ -35,6 +35,74 @@ export function SignInForm() {
       setBusy(null);
     }
   };
+  return { busy, error, signIn };
+}
+
+/** "or → Use demo data → choose a role", shared by the sign-in and create-account panels. */
+function DemoAccounts({ busy, onPick }: { busy: string | null; onPick: (email: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const list = useRef<HTMLDivElement>(null);
+  // In the taller create-account panel the roles open below the fold; bring them into view.
+  useEffect(() => {
+    if (open) list.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [open]);
+  return (
+    <div className="mt-5">
+      <div className="flex items-center gap-3 text-xs text-muted">
+        <span className="h-px flex-1 bg-line" />
+        or
+        <span className="h-px flex-1 bg-line" />
+      </div>
+      {!open ? (
+        <Button className="mt-5 h-11 w-full text-[15px]" disabled={busy !== null} onClick={() => setOpen(true)}>
+          Use demo data
+        </Button>
+      ) : (
+        <div ref={list} className="animate-enter mt-5">
+          <div className="flex items-center">
+            <div>
+              <div className="text-sm font-semibold">Choose a demo role</div>
+              <p className="text-xs text-muted">Sign in instantly with a sample account.</p>
+            </div>
+            <button type="button" className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted hover:bg-raised hover:text-ink" disabled={busy !== null} onClick={() => setOpen(false)}>
+              <ArrowLeft aria-hidden className="h-3.5 w-3.5" />
+              Back
+            </button>
+          </div>
+          <div className="mt-3 space-y-2">
+            {ROLES.map(({ role, email, can }) => (
+              <button
+                key={email}
+                type="button"
+                disabled={busy !== null}
+                onClick={() => onPick(email)}
+                className="group flex w-full items-center gap-3 rounded-xl border border-line bg-card px-3 py-2.5 text-left shadow-card transition-colors hover:border-line-strong hover:bg-raised disabled:opacity-60"
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-raised text-xs font-semibold text-ink ring-1 ring-line">
+                  {busy === email ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : role.charAt(0)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium">Continue as {role}</span>
+                  <span className="block truncate text-xs text-muted">{can}</span>
+                </span>
+                <ArrowRight aria-hidden className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-ink" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Email/password sign-in plus demo-mode sample accounts; shown in the homepage sign-in dialog. */
+export function SignInForm() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [show, setShow] = useState(false);
+  const { busy, error, signIn } = useSignIn();
+  const reset = new URLSearchParams(window.location.search).has('reset');
+  const demoMode = useDemoMode();
   // Show the sample account in the fields before signing in, so a browser-saved login can't be mistaken for it.
   const signInAs = (who: string) => {
     setEmail(who);
@@ -76,53 +144,7 @@ export function SignInForm() {
           Sign in
         </Button>
       </form>
-      {health.data?.demoMode && (
-        <div className="mt-5">
-          <div className="flex items-center gap-3 text-xs text-muted">
-            <span className="h-px flex-1 bg-line" />
-            or
-            <span className="h-px flex-1 bg-line" />
-          </div>
-          {!demo ? (
-            <Button className="mt-5 h-11 w-full text-[15px]" disabled={busy !== null} onClick={() => setDemo(true)}>
-              Use demo data
-            </Button>
-          ) : (
-            <div className="animate-enter mt-5">
-              <div className="flex items-center">
-                <div>
-                  <div className="text-sm font-semibold">Choose a demo role</div>
-                  <p className="text-xs text-muted">Sign in instantly with a sample account.</p>
-                </div>
-                <button type="button" className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted hover:bg-raised hover:text-ink" disabled={busy !== null} onClick={() => setDemo(false)}>
-                  <ArrowLeft aria-hidden className="h-3.5 w-3.5" />
-                  Back
-                </button>
-              </div>
-              <div className="mt-3 space-y-2">
-                {ROLES.map(({ role, email: e, can }) => (
-                  <button
-                    key={e}
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => signInAs(e)}
-                    className="group flex w-full items-center gap-3 rounded-xl border border-line bg-card px-3 py-2.5 text-left shadow-card transition-colors hover:border-line-strong hover:bg-raised disabled:opacity-60"
-                  >
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-raised text-xs font-semibold text-ink ring-1 ring-line">
-                      {busy === e ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : role.charAt(0)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium">Continue as {role}</span>
-                      <span className="block truncate text-xs text-muted">{can}</span>
-                    </span>
-                    <ArrowRight aria-hidden className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-ink" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {demoMode && <DemoAccounts busy={busy} onPick={signInAs} />}
     </div>
   );
 }
@@ -133,6 +155,7 @@ const field = 'h-11! px-3.5! text-[15px]!';
 /** Self-service sign-up (demo mode): creates a Staff account and signs it in (POST /auth/register). */
 export function SignUpForm({ demoMode }: { demoMode: boolean }) {
   const qc = useQueryClient();
+  const demo = useSignIn();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -154,34 +177,42 @@ export function SignUpForm({ demoMode }: { demoMode: boolean }) {
   };
   if (!demoMode) return <p className="rounded-lg border border-line bg-raised px-3 py-2.5 text-sm text-muted">New accounts are created by the restaurant Owner. Ask them for an invitation.</p>;
   return (
-    <form onSubmit={submit} className="space-y-3.5">
-      <Field label="Full name">
-        <input className={cx(inputCls, field)} autoComplete="name" placeholder="Maya Chen" value={name} onChange={(e) => setName(e.target.value)} minLength={2} required />
-      </Field>
-      <Field label="Work email">
-        <input className={cx(inputCls, field)} type="email" autoComplete="email" placeholder="you@restaurant.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
-      </Field>
-      <div className="text-sm">
-        <label htmlFor="new-password" className="mb-1.5 block text-sm font-medium">
-          Create password
-        </label>
-        <span className="relative block">
-          <input id="new-password" className={cx(inputCls, field, 'pr-11!')} type={show ? 'text' : 'password'} autoComplete="new-password" placeholder="At least 8 characters" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
-          <button type="button" aria-label={show ? 'Hide password' : 'Show password'} className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md text-muted transition-colors hover:bg-raised hover:text-ink" onClick={() => setShow(!show)}>
-            {show ? <EyeOff aria-hidden className="h-4 w-4" /> : <Eye aria-hidden className="h-4 w-4" />}
-          </button>
-        </span>
-      </div>
-      {error && (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {error}
+    <div>
+      <form onSubmit={submit} className="space-y-3.5">
+        <Field label="Full name">
+          <input className={cx(inputCls, field)} autoComplete="name" placeholder="Maya Chen" value={name} onChange={(e) => setName(e.target.value)} minLength={2} required />
+        </Field>
+        <Field label="Work email">
+          <input className={cx(inputCls, field)} type="email" autoComplete="email" placeholder="you@restaurant.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        </Field>
+        <div className="text-sm">
+          <label htmlFor="new-password" className="mb-1.5 block text-sm font-medium">
+            Create password
+          </label>
+          <span className="relative block">
+            <input id="new-password" className={cx(inputCls, field, 'pr-11!')} type={show ? 'text' : 'password'} autoComplete="new-password" placeholder="At least 8 characters" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
+            <button type="button" aria-label={show ? 'Hide password' : 'Show password'} className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md text-muted transition-colors hover:bg-raised hover:text-ink" onClick={() => setShow(!show)}>
+              {show ? <EyeOff aria-hidden className="h-4 w-4" /> : <Eye aria-hidden className="h-4 w-4" />}
+            </button>
+          </span>
+        </div>
+        {error && (
+          <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            {error}
+          </p>
+        )}
+        <Button type="submit" variant="primary" busy={busy} disabled={demo.busy !== null} className="h-11 w-full text-[15px]">
+          Create account
+        </Button>
+        <p className="text-xs leading-relaxed text-muted">New accounts join Harbor &amp; Vine Bistro as Staff: receiving deliveries, stock counts and invoices. The Owner and Chef approve orders.</p>
+      </form>
+      {demo.error && (
+        <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {demo.error}
         </p>
       )}
-      <Button type="submit" variant="primary" busy={busy} className="h-11 w-full text-[15px]">
-        Create account
-      </Button>
-      <p className="text-xs leading-relaxed text-muted">New accounts join Harbor &amp; Vine Bistro as Staff: receiving deliveries, stock counts and invoices. The Owner and Chef approve orders.</p>
-    </form>
+      <DemoAccounts busy={busy ? 'register' : demo.busy} onPick={(e) => demo.signIn(e, DEMO_PASSWORD, e)} />
+    </div>
   );
 }
 
@@ -197,17 +228,20 @@ export function AuthDialog({ mode, onMode, onClose }: { mode: AuthMode | null; o
   // The active side follows the route ("/login" or "/signup"); it is kept while the dialog closes so it doesn't flip.
   const [shown, setShown] = useState<AuthMode>(mode ?? 'signin');
   const [prev, setPrev] = useState(mode);
+  // Counts switches between the two sides while the dialog is open (not the first opening, where Modal sets focus).
+  const [switches, setSwitches] = useState(0);
   if (mode !== prev) {
     setPrev(mode);
     if (mode) setShown(mode);
+    if (prev && mode) setSwitches((n) => n + 1);
   }
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!prev) return;
+    if (!switches) return;
     // Move focus into the form that just became active.
     const t = setTimeout(() => box.current?.querySelector<HTMLElement>(`[data-panel="${shown}"] input`)?.focus(), 60);
     return () => clearTimeout(t);
-  }, [shown, prev]);
+  }, [switches, shown]);
   const signin = shown === 'signin';
   return (
     <Modal open={mode !== null} onClose={onClose} title={signin ? 'Sign in to StockPilot AI' : 'Create a StockPilot AI account'} size="xl" center bare closeClassName={signin ? 'md:text-white/80 md:hover:bg-white/10 md:hover:text-white' : undefined}>
@@ -272,7 +306,7 @@ function Switch({ text, action, onClick }: { text: string; action: string; onCli
   return (
     <p className="mt-6 text-center text-sm text-muted md:hidden">
       {text}{' '}
-      <button type="button" className="font-medium text-brand-700 hover:underline dark:text-brand-400" onClick={onClick}>
+      <button type="button" className="font-medium text-ink underline-offset-2 hover:underline" onClick={onClick}>
         {action}
       </button>
     </p>
