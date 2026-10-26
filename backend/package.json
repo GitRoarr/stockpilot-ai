@@ -10,7 +10,8 @@
     "test": "vitest run",
     "eval": "tsx --env-file-if-exists=../.env ../evals/runner.ts",
     "smoke": "tsx --env-file-if-exists=../.env src/smoke.ts",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters --noImplicitReturns --noFallthroughCasesInSwitch"
   },
   "dependencies": {
     "@stockpilot/shared": "3.0.0",

@@ -19,6 +19,7 @@
     "eval": "npm run eval -w backend --",
     "smoke": "npm run smoke -w backend",
     "typecheck": "npm run typecheck -w backend && npm run typecheck -w frontend",
+    "lint": "npm run lint -w backend && npm run lint -w frontend",
     "build": "npm run build -w frontend",
     "start": "npm run start -w backend",
     "e2e": "npm run build && playwright test"
