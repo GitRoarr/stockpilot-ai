@@ -27,8 +27,9 @@ const EnvSchema = z.object({
   SESSION_SECRET: optional,
   GEMINI_API_KEY: optional,
   GEMINI_MODEL: z.string().default('gemini-3.8-flash'),
-  GEMINI_FALLBACK_MODEL: z.string().default('gemini-3.5-flash-lite'),
-  GEMINI_API_STYLE: z.enum(['interactions', 'generate_content']).default('interactions'),
+  GEMINI_FALLBACK_MODEL: z.string().default('gemini-3.1-flash-lite'),
+  // generateContent reports a used-up quota at once; the Interactions API answers it after ~35 s (seen as a timeout).
+  GEMINI_API_STYLE: z.enum(['interactions', 'generate_content']).default('generate_content'),
   GEMINI_MAX_RPM: z.coerce.number().int().positive().default(10),
   GEMINI_DAILY_BUDGET: z.coerce.number().int().positive().default(250),
   GEMINI_THINKING_LEVEL: z.enum(['low', 'medium', 'high', 'default']).default('low'),

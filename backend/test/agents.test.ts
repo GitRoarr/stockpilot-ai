@@ -124,10 +124,10 @@ describe('runtime guards with recorded responses', () => {
   });
 
   it('falls back to the second model on 404 and records it; budget exhausted → deterministic (AC-062)', async () => {
-    app = await setup({ llm: new RecordedClient([{ kind: 'error', model: 'gemini-3.8-flash', status: 404 }, { kind: 'chat', model: 'gemini-3.5-flash-lite', text: 'Hello from the fallback model.' }]) });
+    app = await setup({ llm: new RecordedClient([{ kind: 'error', model: 'gemini-3.8-flash', status: 404 }, { kind: 'chat', model: 'gemini-3.1-flash-lite', text: 'Hello from the fallback model.' }]) });
     const id = startRun({ agentId: 'pilot', goal: 'say hello', trigger: 'assignment', playbook: 'chat' });
     await drainJobs();
-    expect(run(id).model).toBe('gemini-3.5-flash-lite');
+    expect(run(id).model).toBe('gemini-3.1-flash-lite');
     expect(run(id).mode).toBe('ai');
     setConfig({ GEMINI_DAILY_BUDGET: 1 });
     const id2 = startRun({ agentId: 'pilot', goal: 'again', trigger: 'assignment', playbook: 'chat' });

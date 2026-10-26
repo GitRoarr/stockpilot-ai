@@ -3,8 +3,8 @@ import { z } from 'zod';
 import { config, setConfig } from '../config.js';
 import { db } from '../db/sqlite.js';
 import { requireRole, requireUser } from '../auth/sessions.js';
-import { aiAvailable, llmClient, modelCallStats } from '../agents/llm/gateway.js';
-import { InteractionsClient } from '../agents/llm/interactions.js';
+import { aiAvailable, llmChat, llmClient, modelCallStats, pausedModels } from '../agents/llm/gateway.js';
+import { LlmUnavailable } from '../agents/llm/types.js';
 import { checkBrevo, brevoConfigured } from '../integrations/brevo.js';
 import { drainJobs } from '../jobs/worker.js';
 import { queueDepth } from '../jobs/queue.js';
@@ -37,8 +37,9 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
     return db().all(`SELECT * FROM notifications WHERE user_id IS NULL OR user_id = ? ORDER BY created_at DESC LIMIT 50`, u.id);
   });
   app.post('/notifications/read', async (req) => {
-    requireUser(req);
-    db().run(`UPDATE notifications SET read_at = ? WHERE read_at IS NULL`, nowIso());
+    const u = requireUser(req);
+    // Only what this user sees: their own notifications and restaurant-wide ones (user_id NULL), never other users'.
+    db().run(`UPDATE notifications SET read_at = ? WHERE read_at IS NULL AND (user_id IS NULL OR user_id = ?)`, nowIso(), u.id);
     return { ok: true };
   });
 
@@ -137,8 +138,14 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
       if (name === 'email') return { name, result: await checkBrevo() };
       if (name === 'gemini') {
         if (!config.GEMINI_API_KEY) return { name, result: 'no_key' };
-        const c = new InteractionsClient(config.GEMINI_API_KEY);
-        return { name, result: `ok: ${await c.ping(config.GEMINI_MODEL)}` };
+        // A real (one-word) request through the same path the agents use, so quota and fallback show up honestly.
+        try {
+          const { model } = await llmChat('integration_test', { system: 'Reply with the single word OK.', history: [{ role: 'user', text: 'OK?' }], tools: [] });
+          const paused = Object.keys(pausedModels());
+          return { name, result: `ok: ${model} answered${paused.length ? ` (daily quota used up: ${paused.join(', ')})` : ''}` };
+        } catch (e) {
+          return { name, result: e instanceof LlmUnavailable ? `unavailable: ${e.reason} — ${e.message}` : `error: ${(e as Error).message}` };
+        }
       }
       return { name, result: 'not_supported' };
     } catch (e) {

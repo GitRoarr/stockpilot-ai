@@ -44,7 +44,8 @@ export async function buildServer(): Promise<FastifyInstance> {
     return reply.status(status).send({ error: { code: status >= 500 ? 'INTERNAL' : 'BAD_REQUEST', message: status >= 500 ? 'Internal error' : (err as Error).message } });
   });
   app.setNotFoundHandler((req, reply) => {
-    if (req.url.startsWith('/api/') || !webDist) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Not found' } });
+    // Missing build files 404 instead of getting index.html (a stale cached page would otherwise load HTML as script).
+    if (req.url.startsWith('/api/') || req.url.startsWith('/assets/') || !webDist) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Not found' } });
     return reply.sendFile('index.html');
   });
 

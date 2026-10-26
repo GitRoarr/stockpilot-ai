@@ -12,6 +12,7 @@ let cached: { key: string; client: LlmClient } | undefined;
 /** Tests and evals inject a recorded client; `null` forces "no key" behaviour. */
 export function setLlmClient(c: LlmClient | null | undefined): void {
   override = c;
+  pausedUntil.clear();
 }
 
 export function llmClient(): LlmClient | null {
@@ -50,6 +51,23 @@ export function setBreakerEnabled(on: boolean): void {
 }
 export function breakerState(): { failStreak: number; openUntil: number } {
   return { failStreak, openUntil };
+}
+
+// Free-tier quotas are per model and per day. A model that reports its daily quota used up is skipped until the quota
+// resets (midnight Pacific), so later calls go straight to the other model instead of waiting for another refusal.
+const pausedUntil = new Map<string, number>();
+const isDailyQuota = (e: unknown) => statusOf(e) === 429 && /per ?day|PerDay|daily/i.test(`${(e as Error)?.message ?? ''} ${JSON.stringify((e as { details?: unknown })?.details ?? '')}`);
+/** Milliseconds timestamp of the next midnight in America/Los_Angeles (when Gemini daily quotas reset). */
+export function nextQuotaReset(now = Date.now()): number {
+  const t = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(now));
+  const n = (k: string) => Number(t.find((x) => x.type === k)?.value ?? 0);
+  return now + (86_400 - (n('hour') * 3600 + n('minute') * 60 + n('second'))) * 1000;
+}
+export function pausedModels(): Record<string, string> {
+  return Object.fromEntries([...pausedUntil].filter(([, u]) => u > Date.now()).map(([m, u]) => [m, new Date(u).toISOString()]));
+}
+export function resetModelPauses(): void {
+  pausedUntil.clear();
 }
 
 export function callsToday(): number {
@@ -99,11 +117,16 @@ async function withModels<T extends { usage?: { tokensIn?: number; tokensOut?: n
     record(null, purpose, 'skipped', 0);
     throw new LlmUnavailable('model_cooldown', `Model paused after ${BREAKER_FAILURES} failed requests; retrying after a short cool-down`);
   }
-  const models = [config.GEMINI_MODEL, config.GEMINI_FALLBACK_MODEL];
+  const models = [...new Set([config.GEMINI_MODEL, config.GEMINI_FALLBACK_MODEL])].filter((m) => !((pausedUntil.get(m) ?? 0) > Date.now()));
+  if (!models.length) {
+    record(null, purpose, 'skipped', 0);
+    throw new LlmUnavailable('rate_limited', 'Both Gemini models have used their free-tier quota for today');
+  }
   let lastErr: unknown;
   for (let m = 0; m < models.length; m++) {
     const model = models[m];
-    // Primary: retries for 429/408/5xx with backoff; fallback model: one attempt (FR-062).
+    // First model: retries a short rate limit (429 per minute) or a server error with backoff; a timeout or a used-up
+    // daily quota moves straight to the next model (FR-062).
     const attempts = m === 0 ? 3 : 1;
     for (let a = 0; a < attempts; a++) {
       await acquireSlot();
@@ -116,13 +139,18 @@ async function withModels<T extends { usage?: { tokensIn?: number; tokensOut?: n
       } catch (e) {
         lastErr = e;
         const st = statusOf(e);
-        record(model, purpose, `error_${st ?? 'unknown'}`, Date.now() - t0);
-        const retryable = st === 429 || st === 408 || (st !== undefined && st >= 500);
+        record(model, purpose, `error_${st ?? 'unknown'}${isDailyQuota(e) ? '_daily_quota' : ''}`, Date.now() - t0);
+        if (isDailyQuota(e)) {
+          pausedUntil.set(model, nextQuotaReset());
+          break;
+        }
+        const retryable = st === 429 || (st !== undefined && st >= 500);
         if (!retryable) break;
         if (a < attempts - 1 && !override) await sleep(500 * 2 ** a + Math.random() * 300);
       }
     }
-    if (![404, 403, 429].includes(statusOf(lastErr) ?? 0)) break;
+    const st = statusOf(lastErr) ?? 0;
+    if (![404, 403, 429, 408].includes(st) && st < 500) break;
   }
   const st = statusOf(lastErr);
   const reason = st === 429 ? 'rate_limited' : st === 408 ? 'timeout' : st === 404 || st === 403 ? 'model_unavailable' : 'model_error';

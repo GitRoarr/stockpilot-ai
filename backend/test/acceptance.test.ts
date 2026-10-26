@@ -129,11 +129,11 @@ describe('AC-057 — "Private party of 40 on Saturday, mostly burgers" with a re
 
 describe('AC-062 — fallback model and daily budget', () => {
   it('records the fallback model on a 404; with the budget exhausted no call is made', async () => {
-    const rec = new RecordedClient([{ kind: 'error', model: 'gemini-3.8-flash', status: 404 }, { kind: 'chat', model: 'gemini-3.5-flash-lite', text: 'Hello.' }]);
+    const rec = new RecordedClient([{ kind: 'error', model: 'gemini-3.8-flash', status: 404 }, { kind: 'chat', model: 'gemini-3.1-flash-lite', text: 'Hello.' }]);
     app = await setup({ llm: rec });
     const a = startRun({ agentId: 'pilot', goal: 'hello', trigger: 'assignment', playbook: 'chat' });
     await drainJobs();
-    expect(db().get<{ model: string }>(`SELECT model FROM agent_runs WHERE id = ?`, a)!.model).toBe('gemini-3.5-flash-lite');
+    expect(db().get<{ model: string }>(`SELECT model FROM agent_runs WHERE id = ?`, a)!.model).toBe('gemini-3.1-flash-lite');
     const calls = rec.requests.length;
     setConfig({ GEMINI_DAILY_BUDGET: 1 });
     const b = startRun({ agentId: 'pilot', goal: 'again', trigger: 'assignment', playbook: 'chat' });

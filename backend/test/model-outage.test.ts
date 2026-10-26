@@ -2,7 +2,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import type { FastifyInstance } from 'fastify';
 import { db } from '../src/db/sqlite.js';
 import { drainJobs } from '../src/jobs/worker.js';
-import { aiAvailable, llmChat, resetBreaker, setBreakerEnabled, setLlmClient } from '../src/agents/llm/gateway.js';
+import { aiAvailable, llmChat, nextQuotaReset, pausedModels, resetBreaker, setBreakerEnabled, setLlmClient } from '../src/agents/llm/gateway.js';
+import { config, setConfig } from '../src/config.js';
 import type { LlmClient } from '../src/agents/llm/types.js';
 import { startMorningRun } from '../src/agents/triggers.js';
 import { api, CHEF, login, setup, type Session } from './helpers.js';
@@ -80,5 +81,56 @@ describe('circuit breaker', () => {
     resetBreaker();
     setLlmClient({ style: 'recorded', chat: async () => ({ text: 'ok', calls: [] }), structured: async () => ({ data: {} }) } as unknown as LlmClient);
     await expect(llmChat('test', { system: 's', history: [], tools: [] })).resolves.toMatchObject({ response: { text: 'ok' } });
+  });
+});
+
+describe('model fallback', () => {
+  const req = { system: 's', history: [], tools: [] };
+  const scripted = (fail: (model: string) => Error | null, log: string[]) =>
+    ({
+      style: 'recorded',
+      chat: async (r: { model: string }) => {
+        log.push(r.model);
+        const e = fail(r.model);
+        if (e) throw e;
+        return { text: `ok from ${r.model}`, calls: [] };
+      },
+      structured: async () => ({ data: {} }),
+    }) as unknown as LlmClient;
+  const saved = { primary: config.GEMINI_MODEL, fallback: config.GEMINI_FALLBACK_MODEL };
+  afterEach(() => setConfig({ GEMINI_MODEL: saved.primary, GEMINI_FALLBACK_MODEL: saved.fallback }));
+
+  it('a used-up daily quota pauses that model until the quota resets, so later calls go straight to the fallback', async () => {
+    setConfig({ GEMINI_MODEL: 'model-a', GEMINI_FALLBACK_MODEL: 'model-b' });
+    const log: string[] = [];
+    const daily = () => Object.assign(new Error('Rate limit exceeded for model model-a (limit: 500 requests per day on Free Tier)'), { status: 429 });
+    setLlmClient(scripted((m) => (m === 'model-a' ? daily() : null), log));
+    await expect(llmChat('test', req)).resolves.toMatchObject({ model: 'model-b' });
+    expect(log).toEqual(['model-a', 'model-b']); // no retries on a daily quota
+    expect(Object.keys(pausedModels())).toEqual(['model-a']);
+    await expect(llmChat('test', req)).resolves.toMatchObject({ model: 'model-b' });
+    expect(log).toEqual(['model-a', 'model-b', 'model-b']); // model-a skipped while paused
+  });
+
+  it('when both models are out of daily quota, the call fails at once as rate limited', async () => {
+    setConfig({ GEMINI_MODEL: 'model-a', GEMINI_FALLBACK_MODEL: 'model-b' });
+    const log: string[] = [];
+    setLlmClient(scripted((m) => Object.assign(new Error(`limit: 500 requests per day for ${m}`), { status: 429 }), log));
+    await expect(llmChat('test', req)).rejects.toMatchObject({ reason: 'rate_limited' });
+    await expect(llmChat('test', req)).rejects.toMatchObject({ reason: 'rate_limited' });
+    expect(log).toEqual(['model-a', 'model-b']); // the second call did not wait for two more refusals
+  });
+
+  it('a timeout on the first model moves to the fallback model without retrying', async () => {
+    setConfig({ GEMINI_MODEL: 'model-a', GEMINI_FALLBACK_MODEL: 'model-b' });
+    const log: string[] = [];
+    setLlmClient(scripted((m) => (m === 'model-a' ? timeout() : null), log));
+    await expect(llmChat('test', req)).resolves.toMatchObject({ model: 'model-b' });
+    expect(log).toEqual(['model-a', 'model-b']);
+  });
+
+  it('the daily quota resets at the next midnight in Los Angeles', () => {
+    const at = Date.UTC(2026, 9, 25, 20, 0, 0); // 13:00 PDT
+    expect(new Date(nextQuotaReset(at)).toISOString()).toBe('2026-10-26T07:00:00.000Z');
   });
 });
