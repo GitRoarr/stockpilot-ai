@@ -1,131 +1,106 @@
 # StockPilot AI — Your AI Purchasing Team for Restaurants
 
-A team of four collaborating AI agents that runs a restaurant's purchasing: **Pilot** plans the day and delegates, **Demand Planner** forecasts demand, **Buyer** orders at the lowest total cost across suppliers, and **AP Clerk** checks invoices and recovers credits. People approve what matters, answer the agents' questions and work alongside them.
+Four AI agents run a restaurant's purchasing: **Pilot** plans the day, **Demand Planner** forecasts demand, **Buyer** orders at the lowest total cost, and **AP Clerk** checks invoices and recovers credits. People approve what matters — nothing reaches a supplier without them.
 
 `forecast → optimise → order → supplier confirms → receive → match the invoice → recover credits → report savings`
 
-Built for the Brain³ AI Automation Assignment (Full Stack AI Web Developer), from the approved SRS and Solution Design v3.0. All restaurant data is fictional (Harbor & Vine Bistro, San Francisco Bay Area, USD).
+Built for the Brain³ AI Automation Assignment (Full Stack AI Web Developer) from the approved SRS and Solution Design v3.0. All restaurant data is fictional (Harbor & Vine Bistro, San Francisco Bay Area, USD).
 
 ## Highlights
 
-- **Agents:** manifests with typed tools, delegation, questions to humans, durable runs that survive restarts, budgets and live traces.
-- **Safety:** a policy engine decides what needs approval; nothing reaches a supplier without it. Numbers come only from tested engines, and every number in AI-written text is checked against the facts.
-- **Engines:** backtested forecasting with weather and holidays, reorder needs, a MILP optimiser (HiGHS) with a verifier, and three-way invoice matching.
-- **Resilient:** works without any API key; if Gemini is unavailable, every workflow finishes on a labelled rule-based pipeline.
-- **App:** light/dark themes, dashboard, inbox, orders, receiving, disputes, savings, forecast, team, CSV import/export, supplier portal, email.
+- **Agents:** typed tools, delegation, questions to people, durable runs, live traces.
+- **Safety:** a policy engine decides what needs approval; numbers come only from tested engines and every number the AI writes is checked.
+- **Engines:** backtested forecasting (weather, holidays), MILP supplier optimiser (HiGHS), three-way invoice matching.
+- **Resilient:** works without any API key; if Gemini is unavailable, workflows finish on a labelled rules engine.
+- **App:** public homepage, sign-in and sign-up, role-based dashboard (Owner, Chef, Staff), inbox approvals, supplier portal, email, CSV import/export, light/dark themes.
 
-## Quick start
+## Run locally
 
-Requires **Node.js 22.13+** (24 recommended). No paid services.
+Requires **Node.js 22.13+** (24 recommended).
 
 ```bash
 cp .env.example .env
 sed -i "s/^SESSION_SECRET=.*/SESSION_SECRET=$(openssl rand -hex 32)/" .env
 npm install
-npm run seed     # loads the restaurant data and prints the logins
-npm run dev      # web http://localhost:5173 · API http://127.0.0.1:8787
+npm run seed     # loads the restaurant data
+npm run dev      # http://localhost:5173 (API on :8787)
 ```
 
-| Role | Email | Password |
-|---|---|---|
-| Owner | `sara@harborvine.com` | `harborvine2026` |
-| Chef | `daniel@harborvine.com` | `harborvine2026` |
-| Staff | `leo@harborvine.com` | `harborvine2026` |
+Open the homepage → **Sign in → Use demo data**, or sign in with:
 
-Owner can do everything; Chef plans, approves up to $1,500 and handles disputes; Staff receives deliveries and uploads invoices. In demo mode, **Get started** on the homepage also lets a visitor create their own account; new accounts are always Staff.
+| Role | Email | Password | Can |
+|---|---|---|---|
+| Owner | `sara@harborvine.com` | `harborvine2026` | Everything, including settings and policy |
+| Chef | `daniel@harborvine.com` | `harborvine2026` | Plan, approve orders up to $1,500, disputes |
+| Staff | `leo@harborvine.com` | `harborvine2026` | Receive deliveries, count stock, upload invoices |
 
-## Configuration
-
-All variables are in [`.env.example`](.env.example). Secrets live only in `.env` (git-ignored).
-
-| Variable | Purpose |
-|---|---|
-| `SESSION_SECRET` | **Required.** 32+ random characters |
-| `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL` | AI agents, standups and invoice reading ([Google AI Studio](https://aistudio.google.com/app/apikey), free tier). Without a key: rule-based mode |
-| `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` | Order, standup and dispute emails from a Brevo-verified sender. Without them: portal links only |
-| `SUPPLIER_EMAIL_OVERRIDE` | In `DEMO_MODE`, **every** email goes to this inbox, never to the sample addresses |
-| `DEMO_MODE` | Enables the simulated clock and data reset (Settings → Data & clock) and the email redirect |
-| `APP_BASE_URL` | Base URL for links in emails |
-| `HOST`, `PORT`, `DATABASE_PATH`, `SEED_IF_EMPTY` | Server address, SQLite file, seeding on first start |
-
-Weather (Open-Meteo) and holidays (Nager.Date) need no keys. Check all integrations with `npm run smoke` or **Settings → Integrations**.
+In demo mode, **Get started** lets a visitor create an account (always Staff).
 
 ## Run with Docker
 
-Requires Docker with Compose v2. The images contain no secrets; configuration is read from `.env` at start-up.
-
 ```bash
-cp .env.example .env
-sed -i "s/^SESSION_SECRET=.*/SESSION_SECRET=$(openssl rand -hex 32)/" .env   # plus optional Gemini / Brevo keys
-docker compose up --build      # start → http://localhost:8080
-docker compose logs -f         # follow logs
-docker compose down            # stop (keeps the database; `down -v` deletes it)
+cp .env.example .env               # set SESSION_SECRET (+ optional Gemini / Brevo keys)
+docker compose up --build          # http://localhost:8080
+docker compose logs -f             # logs
+docker compose down                # stop (data kept; `down -v` deletes it)
 ```
 
-| Service | URL | What |
-|---|---|---|
-| `frontend` | http://localhost:8080 | nginx serving the built app; forwards `/api` (incl. live updates) and the supplier portal `/s/` to the backend |
-| `backend` | http://127.0.0.1:8787 | Fastify API (published on this machine only), health at `/api/health` |
+nginx serves the app and forwards `/api` and the supplier portal to the backend. The SQLite database and uploads live in Docker volumes; the schema and restaurant data are created on first start, and migrations run automatically. Hot reload: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build` (http://localhost:5173). If `npm run dev` is running, set `DOCKER_API_PORT` in `.env` to avoid the port clash. Docker is for local use only.
 
-- **Database:** SQLite in the `db-data` volume; invoice photos in `uploads`. On first start the schema is created and the restaurant data is loaded (`SEED_IF_EMPTY`). Reload it with `docker compose exec backend npm run seed`, or start over with `docker compose down -v`.
-- **Migrations:** run automatically when the API starts (`schema.sql` is idempotent; later columns are added in `backend/src/db/sqlite.ts`). Restart the backend after pulling changes: `docker compose up --build -d backend`.
-- **Hot reload:** `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build` → http://localhost:5173 (Vite reloads the browser; `tsx watch` restarts the API).
-- **Ports in use** (e.g. `npm run dev` is running): set `DOCKER_WEB_PORT`, `DOCKER_API_PORT` or `DOCKER_DEV_WEB_PORT` in `.env`.
-- **Troubleshooting:** `SESSION_SECRET` missing → Compose stops with a clear message; `frontend` waits until `backend` is healthy (`docker compose ps`); AI steps labelled *rules engine* mean Gemini was unavailable (no key, quota or timeout) — check **Settings → Integrations**.
+## Configuration
 
-Docker is for local use only; Render does not use these files.
+All variables are in [`.env.example`](.env.example); secrets live only in `.env` (git-ignored).
 
-## Deploy to Render (free)
-
-| Setting | Value |
+| Variable | Purpose |
 |---|---|
-| Build command | `npm ci --include=dev && npm run build` |
-| Start command | `npm run start` |
-| Health check | `/api/health` |
-| Environment | `NODE_VERSION=24`, `NODE_ENV=production`, `HOST=0.0.0.0`, `SESSION_SECRET`, `APP_BASE_URL=https://<service>.onrender.com`, `DEMO_MODE=true`, plus the Gemini and Brevo variables |
+| `SESSION_SECRET` | **Required**, 32+ random characters |
+| `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`, `GEMINI_API_STYLE` | AI agents, standups, invoice reading — see **Gemini** below |
+| `BREVO_API_KEY`, `BREVO_SENDER_EMAIL` | Order, standup and dispute emails |
+| `DEMO_MODE`, `SUPPLIER_EMAIL_OVERRIDE` | Demo clock, data reset and sign-up; every email goes to the override inbox |
+| `APP_BASE_URL`, `HOST`, `PORT`, `DATABASE_PATH` | Links in emails, server address, SQLite file |
 
-The first start seeds the database automatically. On the free plan data resets on restart or redeploy, and the service sleeps after about 15 idle minutes.
+Weather (Open-Meteo) and holidays (Nager.Date) need no keys. Check integrations in **Settings → Integrations** or with `npm run smoke`.
+
+### Gemini
+
+- Defaults: `GEMINI_MODEL=gemini-3.8-flash`, `GEMINI_FALLBACK_MODEL=gemini-3.1-flash-lite`, `GEMINI_API_STYLE=generate_content`. Both models are on the free tier and each has its own daily quota.
+- Free-tier limits are **per Google Cloud project, not per key**, and daily quotas reset at **midnight Pacific** — a new key in the same project does not reset them. Your exact limits are on [AI Studio → Rate limits](https://aistudio.google.com/rate-limit).
+- When a model's daily quota is used up, the app skips it until the reset and uses the other model; if both are out (or time out), workflows finish on the labelled rules engine with the same figures.
+- **Settings → Integrations → Test connection** sends a real request and shows which model answered.
+- The key is read only by the backend; AI output is schema-validated and every number it writes must match the engines' results.
+
+## Deploy to Render
+
+One web service serves the API and the built app on the same origin (no CORS needed).
+
+Build `npm ci --include=dev && npm run build` · Start `npm run start` · Health check `/api/health` · Environment: `NODE_VERSION=24`, `NODE_ENV=production`, `HOST=0.0.0.0`, `SESSION_SECRET`, `APP_BASE_URL` (the exact `https://…onrender.com` URL of the service — email links and the secure cookie use it), `DEMO_MODE=true`, `GEMINI_API_KEY` (+ the model variables above), `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `SUPPLIER_EMAIL_OVERRIDE`.
+
+The first start seeds the data. SQLite lives on the service's disk: on the free plan it resets on every redeploy or restart; keeping data needs a paid persistent disk mounted where `DATABASE_PATH` points.
 
 ## Demo walkthrough
 
-1. **Today → Run morning plan.** Pilot delegates to Demand Planner and Buyer; watch the trace.
-2. **Inbox:** approve the Golden Gate order — **$366.92, saving $18.48** (*Why this supplier?* shows the comparison).
-3. Open the supplier portal link from the order (or the email), confirm only **30 lb** chicken.
-4. **Inbox:** the Buyer replanned the shortfall — Bay Meat Supply **$49.00**.
-5. As Staff: **Receiving → Receive**, then upload `data/sample-invoice/INV-GG-20817.png` → three-way match finds **$9.60 + $32.50**.
-6. **Disputes:** AP Clerk drafted **$42.10**; approve, accept it in the portal → **Savings** shows the credit.
-7. **Team chat:** "Private party of 40 on Saturday" → approve the event → the forecast rises.
-8. **Settings → Data & clock → +5 h:** a missed supplier confirmation triggers a reminder, then escalation.
-
-Data you enter in **Inventory** (suppliers, offers, dishes, sales, stock) or import from CSV is used by the next plan.
+1. **Today → Run morning plan** and watch the agents' trace.
+2. **Inbox:** approve the Golden Gate order — **$366.92, saving $18.48** (*Why? See the run*).
+3. In the supplier portal, confirm only **30 lb** chicken → the Buyer replans the shortfall (**$49.00**).
+4. As Staff: **Receiving → Receive**, upload `data/sample-invoice/INV-GG-20817.png` → the match finds **$9.60 + $32.50**.
+5. **Disputes:** approve the **$42.10** claim, accept it in the portal → **Savings** shows the credit.
 
 ## Tests
 
-| Command | What |
-|---|---|
-| `npm test` | 139 unit, property and API tests, including every SRS acceptance criterion |
-| `npm run eval` | 20 agent scenarios on recorded model responses (`-- --live` runs them against Gemini) |
-| `npm run e2e` | 8 Playwright browser tests in Chrome |
-| `npm run typecheck` / `npm run build` | Strict TypeScript and production build |
-
-CI runs all of them on every push ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)). Gemini, Brevo, Open-Meteo and Nager.Date have also been verified live.
+`npm test` (147 unit and API tests, every SRS acceptance criterion) · `npm run eval` (20 agent scenarios) · `npm run e2e` (8 browser tests) · `npm run lint` (strict compiler checks) · `npm run typecheck` · `npm run build`. CI runs them on every push.
 
 ## Project structure
 
 ```
-backend/     Fastify + TypeScript: engines, agent runtime and policy, services, integrations, jobs, REST + SSE (Dockerfile)
-frontend/    React 19, Vite, Tailwind 4, TanStack Query (Dockerfile, nginx config)
+backend/     Fastify API: engines, agent runtime, policy, services, integrations (Dockerfile)
+frontend/    React 19, Vite, Tailwind 4 web app (Dockerfile, nginx config)
 packages/    shared types
-docker-compose.yml, docker-compose.dev.yml   local Docker stack
-templates/   the "Restaurant Purchasing Team": agent manifests, policy, schedule
-evals/       agent eval scenarios and runner
-e2e/         browser tests
+templates/   agent manifests, policy and schedule
+evals/ e2e/  agent evals and browser tests
 ```
-
-Principle: **numbers in code, language in AI.**
 
 ## Limitations
 
-- P1 features are not built: Telegram approvals, margin alerts, public supplier API, MCP server, template export.
 - Single restaurant, SQLite, link-based supplier portal (no supplier accounts).
-- Gemini free-tier limits are unpublished; when the quota is reached the app switches to rule-based mode until it resets.
+- Not built (P1): Telegram approvals, margin alerts, public supplier API, MCP server.
+- Gemini free-tier quota is limited; when it runs out the app uses the rules engine until it resets.
