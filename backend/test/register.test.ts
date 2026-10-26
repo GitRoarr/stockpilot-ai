@@ -53,3 +53,15 @@ describe('POST /auth/register', () => {
     }
   });
 });
+
+describe('PATCH /me/preferences', () => {
+  it('turns the morning standup email off and on for the signed-in user (FR-093)', async () => {
+    const r = await register({ name: 'Pat Chef', email: 'pat@example.com', password: 'long-enough-1' });
+    const me = api(app, { cookie: cookieOf(r), role: 'staff' });
+    expect((await me.get('/me')).body.preferences).toEqual({ briefingEmail: true });
+    expect((await me.patch('/me/preferences', { briefingEmail: false })).status).toBe(200);
+    expect((await me.get('/me')).body.preferences).toEqual({ briefingEmail: false });
+    expect(db().get<{ briefing_opt_in: number }>(`SELECT briefing_opt_in FROM users WHERE email = 'pat@example.com'`)!.briefing_opt_in).toBe(0);
+    expect((await me.patch('/me/preferences', { briefingEmail: 'yes' })).status).toBe(400);
+  });
+});

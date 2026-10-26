@@ -8,7 +8,7 @@ import { useTheme, type ThemePref } from '../lib/theme';
 import { useToast } from './toast';
 import { Badge, Button, cx, dt, IconButton, inputCls, LogoMark, Modal, Tip } from './ui';
 
-export type Me = { user: { id: string; name: string; email: string; role: 'owner' | 'chef' | 'staff' }; restaurant: string; onboardingComplete: boolean; illustrativeData: boolean };
+export type Me = { user: { id: string; name: string; email: string; role: 'owner' | 'chef' | 'staff' }; restaurant: string; onboardingComplete: boolean; illustrativeData: boolean; preferences?: { briefingEmail: boolean } };
 
 const MOBILE = ['/', '/inbox', '/orders', '/receiving'];
 const ROLE_LABEL = { owner: 'Owner', chef: 'Chef', staff: 'Staff' } as const;

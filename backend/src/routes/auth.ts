@@ -65,6 +65,16 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.get('/me', async (req) => {
     const u = requireUser(req);
     const s = getSettings();
-    return { user: u, restaurant: s.restaurantName, onboardingComplete: s.onboardingComplete, illustrativeData: s.demoData };
+    const optIn = db().get<{ briefing_opt_in: number }>(`SELECT briefing_opt_in FROM users WHERE id = ?`, u.id)?.briefing_opt_in;
+    return { user: u, restaurant: s.restaurantName, onboardingComplete: s.onboardingComplete, illustrativeData: s.demoData, preferences: { briefingEmail: optIn === 1 } };
+  });
+
+  // Personal preferences. The morning standup email goes only to Chefs and Owners who opted in (FR-093).
+  app.patch('/me/preferences', async (req) => {
+    const u = requireUser(req);
+    const body = z.object({ briefingEmail: z.boolean() }).strict().parse(req.body);
+    db().run(`UPDATE users SET briefing_opt_in = ? WHERE id = ?`, body.briefingEmail ? 1 : 0, u.id);
+    audit({ type: 'user', id: u.id }, 'user.preferences', 'user', u.id, { after: body });
+    return { briefingEmail: body.briefingEmail };
   });
 }

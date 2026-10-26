@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, authRedirect, post, put } from '../api/client';
+import { api, authRedirect, patch, post, put } from '../api/client';
 import type { Me } from '../components/Layout';
 import { Building2, Clock, Loader2, FastForward, FileSignature, Monitor, Moon, Plug, RotateCcw, ShieldCheck, Sun, TimerReset, UserRound } from 'lucide-react';
 import { useTheme, type ThemePref } from '../lib/theme';
@@ -145,7 +145,32 @@ function Profile({ me }: { me: Me }) {
           <p className="mt-1.5 text-xs text-muted">{pref === 'system' ? `Following your device (currently ${theme}).` : 'Saved in this browser.'}</p>
         </fieldset>
       </div>
+      {me.user.role !== 'staff' && <BriefingEmail me={me} />}
     </Card>
+  );
+}
+
+/** FR-093: the morning standup email goes to Chefs and Owners who opted in. */
+function BriefingEmail({ me }: { me: Me }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const on = me.preferences?.briefingEmail ?? true;
+  const m = useMutation({
+    mutationFn: (v: boolean) => patch('/me/preferences', { briefingEmail: v }),
+    onSuccess: (_r, v) => {
+      qc.invalidateQueries({ queryKey: ['me'] });
+      toast('success', v ? 'You will get the morning standup by email' : 'Morning standup emails turned off');
+    },
+    onError: (e) => toast('error', 'Could not save', (e as Error).message),
+  });
+  return (
+    <label className="mt-5 flex items-start gap-3 border-t border-line pt-4 text-sm">
+      <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--foreground)]" checked={on} disabled={m.isPending} onChange={(e) => m.mutate(e.target.checked)} />
+      <span>
+        <span className="block font-medium">Email me the morning standup</span>
+        <span className="block text-xs text-muted">Sent to {me.user.email} once a day after the morning plan{me.illustrativeData ? '; in demo mode every email goes to the demo inbox' : ''}.</span>
+      </span>
+    </label>
   );
 }
 

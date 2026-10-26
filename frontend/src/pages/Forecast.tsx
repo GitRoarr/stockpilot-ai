@@ -54,16 +54,23 @@ export function ForecastPage({ me }: { me: Me }) {
                 </Card>
                 <div className="min-w-0 space-y-4">
                   <Assumptions />
-                  <Card title="Context" icon={CloudRain}>
+                  <Card title="Context" icon={CloudRain} subtitle={`Weather and holidays, and their effect on ${sel.name}`}>
                     <ul className="space-y-1 text-sm">
-                      {f.context.days.map((c: any) => (
-                        <li key={c.date} className="flex gap-2">
-                          <span className="w-24">{day(c.date)}</span>
-                          <span className="font-mono text-xs">{c.tmaxF === null ? 'no weather' : `${Math.round(c.tmaxF)}°F · ${c.precipIn?.toFixed(2)} in`}</span>
-                          {c.holiday && <Badge tone="violet">{c.holiday}</Badge>}
-                          {c.holidayEve && <Badge tone="violet">eve</Badge>}
-                        </li>
-                      ))}
+                      {f.context.days.map((c: any) => {
+                        // Per-day weather/holiday effect of the selected dish's model (FR-027); 0 for models without context.
+                        const effect = sel.daily.find((d: any) => d.date === c.date)?.effect ?? 0;
+                        return (
+                          <li key={c.date} className="flex flex-wrap items-center gap-2">
+                            <span className="w-24">{day(c.date)}</span>
+                            <span className="font-mono text-xs">{c.tmaxF === null ? 'no weather' : `${Math.round(c.tmaxF)}°F · ${c.precipIn?.toFixed(2)} in`}</span>
+                            {c.holiday && <Badge tone="violet">{c.holiday}</Badge>}
+                            {c.holidayEve && <Badge tone="violet">eve</Badge>}
+                            <span className={cx('ml-auto font-mono text-xs tabular-nums', Math.abs(effect) < 0.005 ? 'text-muted' : effect > 0 ? 'text-emerald-700' : 'text-red-700')} title="Weather and holiday effect on this dish's forecast">
+                              {Math.abs(effect) < 0.005 ? '±0%' : `${effect > 0 ? '+' : ''}${num(effect * 100)}%`}
+                            </span>
+                          </li>
+                        );
+                      })}
                     </ul>
                     <p className="mt-2 text-xs text-muted">
                       Weather {f.context.status.weather_forecast?.status ?? 'not checked'} · history {f.context.status.weather_history?.status ?? 'not checked'} · holidays {f.context.status.holidays?.status ?? 'not checked'}

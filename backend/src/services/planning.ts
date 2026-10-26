@@ -3,7 +3,7 @@ import { ingredientSigmaH } from '../engines/forecast/backtest.js';
 import { computeNeed, expiryRisks, type ExpiryRisk, type ReorderTrace } from '../engines/reorder.js';
 import { baselinePlan, explainPlan, optimise, type NeedInput, type OfferInput, type OptimiserInput, type Plan, type SupplierInput } from '../engines/optimiser/index.js';
 import { getSettings } from '../lib/settings.js';
-import { addDays, id, json, localDate, localTime, nowIso, round2 } from '../lib/util.js';
+import { addDays, id, json, localDate, localTime, nowIso, round2, weekday } from '../lib/util.js';
 import { activeAgreements } from './agreements.js';
 import { currentModelRun, getForecast, ingredientDemand, recipeMap, type ForecastView } from './forecast.js';
 import { batches, stockSummary } from './inventory.js';
@@ -340,9 +340,12 @@ export function getPlan(planId: string): PlanRecord | undefined {
   };
 }
 
-/** Delivery date for an order placed now (lead time, after cut-off +1 day). */
+/** Delivery date for an order placed now: lead time (+1 day after the cut-off), moved to the supplier's next delivery weekday (FR-004). */
 export function deliveryDate(supplierId: string, leadDays: number): string {
   const s = db().get<SupplierRow>(`SELECT * FROM suppliers WHERE id = ?`, supplierId);
   const extra = s && localTime() > s.cutoff_time ? 1 : 0;
-  return addDays(localDate(), Math.max(1, leadDays + extra));
+  let date = addDays(localDate(), Math.max(1, leadDays + extra));
+  const days = new Set((s?.delivery_weekdays ?? '').split(',').filter(Boolean).map(Number));
+  for (let i = 0; i < 7 && days.size && !days.has(weekday(date)); i++) date = addDays(date, 1);
+  return date;
 }

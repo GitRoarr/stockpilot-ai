@@ -323,7 +323,7 @@ function Suppliers({ me }: { me: Me }) {
     <Card pad={false} title="Suppliers" subtitle="Minimum order value, small-order fee, delivery fee, order cycle and cut-off feed the optimiser" actions={can && <Button onClick={() => setEdit({})}>New supplier</Button>}>
       <Q q={q}>
         {(rows) => (
-          <Table head={['Supplier', 'Email', 'Minimum order', 'Delivery fee', 'Order cycle', 'Cut-off', 'Offers', 'Trusted', '']}>
+          <Table head={['Supplier', 'Email', 'Minimum order', 'Delivery fee', 'Delivers', 'Cut-off', 'Offers', 'Trusted', '']}>
             {rows.map((s) => (
               <tr key={s.id} className={cx(!s.active && 'opacity-50')}>
                 <td className="px-3 py-2 font-medium">{s.name}</td>
@@ -333,7 +333,9 @@ function Suppliers({ me }: { me: Me }) {
                   {s.min_order_type === 'soft' && ` (+${usd(s.below_min_fee)} below)`}
                 </td>
                 <td className="px-3 py-2 font-mono">{usd(s.delivery_fee)}</td>
-                <td className="px-3 py-2">{s.order_cycle_days} d</td>
+                <td className="whitespace-nowrap px-3 py-2 text-xs" title={`Order every ${s.order_cycle_days} days`}>
+                  {deliveryDays(s.delivery_weekdays)}
+                </td>
                 <td className="px-3 py-2">{s.cutoff_time}</td>
                 <td className="px-3 py-2 font-mono">{s.offers}</td>
                 <td className="px-3 py-2">{s.trusted ? <Badge tone="green">trusted</Badge> : '—'}</td>
@@ -346,6 +348,16 @@ function Suppliers({ me }: { me: Me }) {
       {edit && <SupplierModal s={edit} onClose={() => setEdit(null)} />}
     </Card>
   );
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+/** "1,2,3,4,5,6" → "Mon–Sat"; non-consecutive days are listed. */
+function deliveryDays(csv: string | null | undefined) {
+  const d = (csv ?? '').split(',').filter(Boolean).map(Number).sort((x, y) => x - y);
+  if (!d.length) return '—';
+  if (d.length === 7) return 'Every day';
+  const run = d.every((x, i) => i === 0 || x === d[i - 1] + 1);
+  return run && d.length > 2 ? `${WEEKDAYS[d[0]]}–${WEEKDAYS[d[d.length - 1]]}` : d.map((x) => WEEKDAYS[x]).join(', ');
 }
 
 function SupplierModal({ s, onClose }: { s: any; onClose: () => void }) {
@@ -402,6 +414,25 @@ function SupplierModal({ s, onClose }: { s: any; onClose: () => void }) {
         <Field label="Order cut-off">
           <input className={inputCls} type="time" value={f.cutoffTime} onChange={(e) => setF({ ...f, cutoffTime: e.target.value })} />
         </Field>
+        <fieldset className="sm:col-span-2">
+          <legend className="mb-1.5 text-sm font-medium">Delivery days</legend>
+          <div className="flex flex-wrap gap-1.5">
+            {WEEKDAYS.map((label, d) => {
+              const days: number[] = String(f.deliveryWeekdays).split(',').filter(Boolean).map(Number);
+              const on = days.includes(d);
+              const toggle = () => {
+                const next = on ? days.filter((x) => x !== d) : [...days, d].sort((x, y) => x - y);
+                if (next.length) setF({ ...f, deliveryWeekdays: next.join(',') });
+              };
+              return (
+                <button key={label} type="button" aria-pressed={on} onClick={toggle} className={cx('h-8 min-w-11 rounded-lg border px-2.5 text-xs font-medium transition-colors', on ? 'border-transparent bg-accent text-on-accent' : 'border-line bg-card text-muted hover:bg-raised hover:text-ink')}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <span className="mt-1 block text-xs text-muted">Orders are scheduled for the first delivery day after the lead time.</span>
+        </fieldset>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={f.trusted} onChange={(e) => setF({ ...f, trusted: e.target.checked })} /> Trusted (eligible for bounded auto-send)
         </label>
